@@ -1,0 +1,714 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Space Panic - Browser Clone</title>
+  <style>
+    :root {
+      --bg: #0b0b0b;
+      --panel: #121212;
+      --accent: #00c2ff;
+    }
+
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 20% 20%, #1a1a1a, #050505 60%, #000);
+      color: #e5e5e5;
+      font-family: "Press Start 2P", "MS Gothic", monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 16px;
+    }
+
+    h1 {
+      font-size: 16px;
+      margin: 6px 0 0;
+      letter-spacing: 2px;
+      color: var(--accent);
+    }
+
+    canvas {
+      border: 4px solid #2b2b2b;
+      background: #000;
+      image-rendering: pixelated;
+      box-shadow: 0 0 20px rgba(0, 194, 255, 0.15);
+      max-width: 100%;
+    }
+
+    .hud {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: #bfbfbf;
+    }
+
+    .inst {
+      font-size: 10px;
+      color: #9b9b9b;
+      width: min(100%, 640px);
+    }
+  </style>
+</head>
+
+<body>
+  <h1>SPACE PANIC - JS EDITION</h1>
+  <div class="hud" id="hud"></div>
+  <canvas id="gameCanvas" width="640" height="400"></canvas>
+  <div class="inst" id="inst">移動: ←→ / 梯子: ↑↓ / 掘る: Space / 踏みつけ: ↓</div>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const screenCtx = canvas.getContext("2d");
+    screenCtx.imageSmoothingEnabled = false;
+    const hud = document.getElementById("hud");
+    const inst = document.getElementById("inst");
+
+    const LOGICAL_WIDTH = 160;
+    const LOGICAL_HEIGHT = 100;
+    const buffer = document.createElement("canvas");
+    buffer.width = LOGICAL_WIDTH;
+    buffer.height = LOGICAL_HEIGHT;
+    const ctx = buffer.getContext("2d");
+    ctx.imageSmoothingEnabled = false;
+
+    function resizeCanvas() {
+      const bodyStyle = window.getComputedStyle(document.body);
+      const horizontalPadding = (parseFloat(bodyStyle.paddingLeft) || 0) + (parseFloat(bodyStyle.paddingRight) || 0);
+      const verticalPadding = (parseFloat(bodyStyle.paddingTop) || 0) + (parseFloat(bodyStyle.paddingBottom) || 0);
+      const borderSize = 8;
+      const gapTotal = 30;
+
+      const availableWidth = Math.max(1, window.innerWidth - horizontalPadding - borderSize);
+      const occupiedHeight = document.querySelector("h1").offsetHeight + hud.offsetHeight + inst.offsetHeight;
+      const availableHeight = Math.max(1, window.innerHeight - verticalPadding - occupiedHeight - gapTotal - borderSize);
+      const scale = Math.max(1, Math.min(availableWidth / LOGICAL_WIDTH, availableHeight / LOGICAL_HEIGHT));
+
+      const cssWidth = Math.floor(LOGICAL_WIDTH * scale);
+      const cssHeight = Math.floor(LOGICAL_HEIGHT * scale);
+      const dpr = window.devicePixelRatio || 1;
+
+      canvas.style.width = `${cssWidth}px`;
+      canvas.style.height = `${cssHeight}px`;
+      canvas.width = Math.max(1, Math.floor(cssWidth * dpr));
+      canvas.height = Math.max(1, Math.floor(cssHeight * dpr));
+      screenCtx.imageSmoothingEnabled = false;
+      hud.style.width = `${cssWidth}px`;
+      inst.style.width = `${cssWidth}px`;
+    }
+
+    const TILE = 8;
+    const CHIP_W = 8;
+    const CHIP_H = 4;
+    const COLS = 20;
+    const ROWS = 25;
+    const FLOOR_ROWS = [4, 9, 14, 19, 24];
+    const LADDER_GROUPS = [
+      { startRow: 3, endRow: 8, count: 3 },
+      { startRow: 8, endRow: 13, count: 2 },
+      { startRow: 13, endRow: 18, count: 1 },
+      { startRow: 18, endRow: 23, count: 6 },
+    ];
+
+    const CONFIG = {
+      gravity: 70,
+      moveSpeed: 18,
+      climbSpeed: 16,
+      digDuration: 0.35,
+      holeOpenTime: 4.0,
+      holeCloseTime: 1.0,
+      enemySpeed: 12,
+      enemyTrapTime: 3.5,
+    };
+
+    const SPRITES = {
+      wall: [
+        { x: 0, y: 0, colorCode: 4 }, { x: 1, y: 0, colorCode: 4 }, { x: 2, y: 0, colorCode: 4 }, { x: 4, y: 0, colorCode: 4 }, { x: 5, y: 0, colorCode: 4 }, { x: 6, y: 0, colorCode: 4 },
+        { x: 0, y: 1, colorCode: 4 }, { x: 1, y: 1, colorCode: 4 }, { x: 2, y: 1, colorCode: 4 }, { x: 4, y: 1, colorCode: 4 }, { x: 5, y: 1, colorCode: 4 }, { x: 6, y: 1, colorCode: 4 },
+        { x: 0, y: 3, colorCode: 4 }, { x: 2, y: 3, colorCode: 4 }, { x: 3, y: 3, colorCode: 4 }, { x: 4, y: 3, colorCode: 4 }, { x: 6, y: 3, colorCode: 4 }, { x: 7, y: 3, colorCode: 4 },
+      ],
+      ladder: [
+        { x: 1, y: 0, colorCode: 3 }, { x: 6, y: 0, colorCode: 3 },
+        { x: 1, y: 1, colorCode: 3 }, { x: 2, y: 1, colorCode: 3 }, { x: 3, y: 1, colorCode: 3 }, { x: 4, y: 1, colorCode: 3 }, { x: 5, y: 1, colorCode: 3 }, { x: 6, y: 1, colorCode: 3 },
+        { x: 1, y: 2, colorCode: 3 }, { x: 6, y: 2, colorCode: 3 },
+        { x: 1, y: 3, colorCode: 3 }, { x: 2, y: 3, colorCode: 3 }, { x: 3, y: 3, colorCode: 3 }, { x: 4, y: 3, colorCode: 3 }, { x: 5, y: 3, colorCode: 3 }, { x: 6, y: 3, colorCode: 3 },
+      ],
+      player: [
+        [
+          { x: 3, y: 1, colorCode: 2 }, { x: 4, y: 1, colorCode: 2 }, { x: 5, y: 1, colorCode: 2 },
+          { x: 2, y: 2, colorCode: 2 }, { x: 3, y: 2, colorCode: 2 }, { x: 4, y: 2, colorCode: 2 }, { x: 5, y: 2, colorCode: 2 },
+          { x: 3, y: 3, colorCode: 6 }, { x: 4, y: 3, colorCode: 6 }, { x: 5, y: 3, colorCode: 6 },
+          { x: 4, y: 4, colorCode: 6 },
+          { x: 1, y: 5, colorCode: 6 }, { x: 2, y: 5, colorCode: 2 }, { x: 3, y: 5, colorCode: 1 }, { x: 4, y: 5, colorCode: 1 }, { x: 5, y: 5, colorCode: 1 },
+          { x: 3, y: 6, colorCode: 1 }, { x: 4, y: 6, colorCode: 1 }, { x: 5, y: 6, colorCode: 1 },
+          { x: 3, y: 7, colorCode: 1 }, { x: 4, y: 7, colorCode: 1 }, { x: 5, y: 7, colorCode: 2 }, { x: 6, y: 7, colorCode: 6 },
+          { x: 3, y: 8, colorCode: 1 }, { x: 4, y: 8, colorCode: 1 }, { x: 5, y: 8, colorCode: 1 },
+          { x: 4, y: 9, colorCode: 1 },
+          { x: 4, y: 10, colorCode: 1 },
+          { x: 3, y: 11, colorCode: 2 }, { x: 4, y: 11, colorCode: 2 },
+        ],
+        [
+          { x: 3, y: 1, colorCode: 2 }, { x: 4, y: 1, colorCode: 2 }, { x: 5, y: 1, colorCode: 2 },
+          { x: 2, y: 2, colorCode: 2 }, { x: 3, y: 2, colorCode: 2 }, { x: 4, y: 2, colorCode: 2 }, { x: 5, y: 2, colorCode: 2 },
+          { x: 3, y: 3, colorCode: 6 }, { x: 4, y: 3, colorCode: 6 }, { x: 5, y: 3, colorCode: 6 },
+          { x: 4, y: 4, colorCode: 6 },
+          { x: 3, y: 5, colorCode: 1 }, { x: 4, y: 5, colorCode: 1 }, { x: 5, y: 5, colorCode: 1 },
+          { x: 1, y: 6, colorCode: 6 }, { x: 2, y: 6, colorCode: 2 }, { x: 3, y: 6, colorCode: 1 }, { x: 4, y: 6, colorCode: 1 }, { x: 5, y: 6, colorCode: 2 }, { x: 6, y: 6, colorCode: 6 },
+          { x: 3, y: 7, colorCode: 1 }, { x: 4, y: 7, colorCode: 1 }, { x: 5, y: 7, colorCode: 1 },
+          { x: 3, y: 8, colorCode: 1 }, { x: 4, y: 8, colorCode: 1 }, { x: 5, y: 8, colorCode: 1 },
+          { x: 3, y: 9, colorCode: 1 }, { x: 5, y: 9, colorCode: 1 }, { x: 6, y: 9, colorCode: 2 },
+          { x: 3, y: 10, colorCode: 1 }, { x: 6, y: 10, colorCode: 2 },
+          { x: 2, y: 11, colorCode: 2 }, { x: 3, y: 11, colorCode: 2 },
+        ],
+        [
+          { x: 3, y: 1, colorCode: 2 }, { x: 4, y: 1, colorCode: 2 }, { x: 5, y: 1, colorCode: 2 },
+          { x: 2, y: 2, colorCode: 2 }, { x: 3, y: 2, colorCode: 2 }, { x: 4, y: 2, colorCode: 2 }, { x: 5, y: 2, colorCode: 2 },
+          { x: 3, y: 3, colorCode: 6 }, { x: 4, y: 3, colorCode: 6 }, { x: 5, y: 3, colorCode: 6 },
+          { x: 4, y: 4, colorCode: 6 },
+          { x: 3, y: 5, colorCode: 1 }, { x: 4, y: 5, colorCode: 1 }, { x: 5, y: 5, colorCode: 2 }, { x: 6, y: 5, colorCode: 6 },
+          { x: 3, y: 6, colorCode: 1 }, { x: 4, y: 6, colorCode: 1 }, { x: 5, y: 6, colorCode: 1 },
+          { x: 1, y: 7, colorCode: 6 }, { x: 2, y: 7, colorCode: 2 }, { x: 3, y: 7, colorCode: 1 }, { x: 4, y: 7, colorCode: 1 }, { x: 5, y: 7, colorCode: 1 },
+          { x: 3, y: 8, colorCode: 1 }, { x: 4, y: 8, colorCode: 1 }, { x: 5, y: 8, colorCode: 1 },
+          { x: 3, y: 9, colorCode: 1 }, { x: 5, y: 9, colorCode: 1 }, { x: 6, y: 9, colorCode: 2 },
+          { x: 3, y: 10, colorCode: 1 }, { x: 6, y: 10, colorCode: 2 },
+          { x: 2, y: 11, colorCode: 2 }, { x: 3, y: 11, colorCode: 2 },
+        ],
+      ],
+      playerClimb: [
+        [
+          { x: 3, y: 1, colorCode: 2 }, { x: 4, y: 1, colorCode: 2 }, { x: 5, y: 1, colorCode: 2 },
+          { x: 2, y: 2, colorCode: 2 }, { x: 3, y: 2, colorCode: 2 }, { x: 4, y: 2, colorCode: 2 }, { x: 5, y: 2, colorCode: 2 },
+          { x: 3, y: 3, colorCode: 6 }, { x: 4, y: 3, colorCode: 6 }, { x: 5, y: 3, colorCode: 6 },
+          { x: 4, y: 4, colorCode: 6 },
+          { x: 2, y: 5, colorCode: 6 }, { x: 3, y: 5, colorCode: 2 }, { x: 4, y: 5, colorCode: 1 }, { x: 5, y: 5, colorCode: 2 }, { x: 6, y: 5, colorCode: 6 },
+          { x: 3, y: 6, colorCode: 1 }, { x: 4, y: 6, colorCode: 1 }, { x: 5, y: 6, colorCode: 1 },
+          { x: 3, y: 7, colorCode: 1 }, { x: 4, y: 7, colorCode: 1 }, { x: 5, y: 7, colorCode: 1 },
+          { x: 2, y: 8, colorCode: 6 }, { x: 3, y: 8, colorCode: 2 }, { x: 4, y: 8, colorCode: 1 }, { x: 5, y: 8, colorCode: 2 }, { x: 6, y: 8, colorCode: 6 },
+          { x: 3, y: 9, colorCode: 1 }, { x: 4, y: 9, colorCode: 1 }, { x: 5, y: 9, colorCode: 1 },
+          { x: 3, y: 10, colorCode: 2 }, { x: 5, y: 10, colorCode: 2 },
+          { x: 2, y: 11, colorCode: 2 }, { x: 5, y: 11, colorCode: 2 },
+        ],
+        [
+          { x: 3, y: 1, colorCode: 2 }, { x: 4, y: 1, colorCode: 2 }, { x: 5, y: 1, colorCode: 2 },
+          { x: 2, y: 2, colorCode: 2 }, { x: 3, y: 2, colorCode: 2 }, { x: 4, y: 2, colorCode: 2 }, { x: 5, y: 2, colorCode: 2 },
+          { x: 3, y: 3, colorCode: 6 }, { x: 4, y: 3, colorCode: 6 }, { x: 5, y: 3, colorCode: 6 },
+          { x: 4, y: 4, colorCode: 6 },
+          { x: 2, y: 5, colorCode: 6 }, { x: 3, y: 5, colorCode: 2 }, { x: 4, y: 5, colorCode: 1 }, { x: 5, y: 5, colorCode: 2 }, { x: 6, y: 5, colorCode: 6 },
+          { x: 3, y: 6, colorCode: 1 }, { x: 4, y: 6, colorCode: 1 }, { x: 5, y: 6, colorCode: 1 },
+          { x: 3, y: 7, colorCode: 1 }, { x: 4, y: 7, colorCode: 1 }, { x: 5, y: 7, colorCode: 1 },
+          { x: 2, y: 8, colorCode: 6 }, { x: 3, y: 8, colorCode: 2 }, { x: 4, y: 8, colorCode: 1 }, { x: 5, y: 8, colorCode: 2 }, { x: 6, y: 8, colorCode: 6 },
+          { x: 3, y: 9, colorCode: 1 }, { x: 4, y: 9, colorCode: 1 }, { x: 5, y: 9, colorCode: 1 },
+          { x: 2, y: 10, colorCode: 2 }, { x: 4, y: 10, colorCode: 2 },
+          { x: 2, y: 11, colorCode: 2 }, { x: 4, y: 11, colorCode: 2 },
+        ],
+        [
+          { x: 3, y: 1, colorCode: 2 }, { x: 4, y: 1, colorCode: 2 }, { x: 5, y: 1, colorCode: 2 },
+          { x: 2, y: 2, colorCode: 2 }, { x: 3, y: 2, colorCode: 2 }, { x: 4, y: 2, colorCode: 2 }, { x: 5, y: 2, colorCode: 2 },
+          { x: 3, y: 3, colorCode: 6 }, { x: 4, y: 3, colorCode: 6 }, { x: 5, y: 3, colorCode: 6 },
+          { x: 4, y: 4, colorCode: 6 },
+          { x: 2, y: 5, colorCode: 6 }, { x: 3, y: 5, colorCode: 2 }, { x: 4, y: 5, colorCode: 1 }, { x: 5, y: 5, colorCode: 2 }, { x: 6, y: 5, colorCode: 6 },
+          { x: 3, y: 6, colorCode: 1 }, { x: 4, y: 6, colorCode: 1 }, { x: 5, y: 6, colorCode: 1 },
+          { x: 2, y: 7, colorCode: 6 }, { x: 3, y: 7, colorCode: 2 }, { x: 4, y: 7, colorCode: 1 }, { x: 5, y: 7, colorCode: 2 }, { x: 6, y: 7, colorCode: 6 },
+          { x: 3, y: 8, colorCode: 1 }, { x: 4, y: 8, colorCode: 1 }, { x: 5, y: 8, colorCode: 1 },
+          { x: 3, y: 9, colorCode: 1 }, { x: 4, y: 9, colorCode: 1 }, { x: 5, y: 9, colorCode: 1 },
+          { x: 3, y: 10, colorCode: 2 }, { x: 5, y: 10, colorCode: 2 },
+          { x: 3, y: 11, colorCode: 2 }, { x: 5, y: 11, colorCode: 2 },
+        ],
+      ],
+    };
+
+    function drawSprite(sprite, x, y, flipX = false) {
+      const spriteWidth = sprite.reduce((max, cell) => Math.max(max, cell.x), 0) + 1;
+      for (const cell of sprite) {
+        const dx = flipX ? spriteWidth - 1 - cell.x : cell.x;
+        ctx.fillStyle = getColor(cell.colorCode);
+        ctx.fillRect(x + dx, y + cell.y, 1, 1);
+      }
+    }
+
+    function hasSpritePixel(sprite, x, y) {
+      return sprite.some((cell) => cell.x === x && cell.y === y);
+    }
+
+    function randomLadderChipColumn() {
+      const x = Math.floor(Math.random() * 7) * 16 + 16;
+      return Math.floor(x / CHIP_W);
+    }
+
+    const KEYS = new Set();
+    window.addEventListener("keydown", (e) => {
+      KEYS.add(e.key);
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) {
+        e.preventDefault();
+      }
+      if (e.key === "Enter" && state.mode === "TITLE") {
+        startGame();
+      }
+    });
+    window.addEventListener("keyup", (e) => KEYS.delete(e.key));
+
+    function makeMap() {
+      const map = Array.from({ length: ROWS }, () => Array(COLS).fill("."));
+
+      FLOOR_ROWS.forEach((row) => {
+        for (let col = 0; col < COLS; col++) {
+          map[row][col] = "F";
+        }
+      });
+
+      LADDER_GROUPS.forEach((group) => {
+        const usedCols = new Set();
+        while (usedCols.size < group.count) {
+          usedCols.add(randomLadderChipColumn());
+        }
+        usedCols.forEach((col) => {
+          for (let row = group.startRow; row <= group.endRow; row++) {
+            map[row][col] = "L";
+          }
+        });
+      });
+
+      return map;
+    }
+
+    const state = {
+      mode: "TITLE",
+      score: 0,
+      lives: 3,
+      stage: 1,
+      map: makeMap(),
+      holes: [],
+      player: null,
+      enemies: [],
+      lastTime: 0,
+    };
+
+    function resetPlayer() {
+      state.player = {
+        x: 1 * TILE,
+        y: 84,
+        w: 8,
+        h: 12,
+        vx: 0,
+        vy: 0,
+        facing: 1,
+        onLadder: false,
+        digging: 0,
+        anim: 0,
+        climbAnim: 0,
+      };
+    }
+
+    function spawnEnemies() {
+      const base = [
+        { x: 64, y: 8 },
+        { x: 72, y: 28 },
+        { x: 96, y: 48 },
+      ];
+      state.enemies = base.map((p) => ({
+        x: p.x,
+        y: p.y,
+        w: 8,
+        h: 8,
+        vx: 0,
+        vy: 0,
+        state: "walk",
+        trappedTimer: 0,
+      }));
+    }
+
+    function startGame() {
+      state.mode = "PLAY";
+      state.score = 0;
+      state.lives = 3;
+      state.stage = 1;
+      state.map = makeMap();
+      state.holes = [];
+      resetPlayer();
+      spawnEnemies();
+    }
+
+    function nextStage() {
+      state.stage += 1;
+      state.map = makeMap();
+      state.holes = [];
+      resetPlayer();
+      spawnEnemies();
+      state.mode = "PLAY";
+    }
+
+    function loseLife() {
+      state.lives -= 1;
+      if (state.lives <= 0) {
+        state.mode = "TITLE";
+        state.player = null;
+        state.enemies = [];
+        state.holes = [];
+      } else {
+        resetPlayer();
+      }
+    }
+
+    function tileAt(col, row) {
+      if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return ".";
+      return state.map[row][col];
+    }
+
+    function holeAt(col, row) {
+      return state.holes.find((h) => h.col === col && h.row === row);
+    }
+
+    function platformPixelAt(x, y) {
+      if (x < 0 || x >= LOGICAL_WIDTH || y < 0 || y >= LOGICAL_HEIGHT) return false;
+      const col = Math.floor(x / CHIP_W);
+      const row = Math.floor(y / CHIP_H);
+      if (tileAt(col, row) !== "F") return false;
+      const hole = holeAt(col, row);
+      if (hole && hole.phase === "open") return false;
+      if (hole && hole.phase === "closing" && hole.timer >= 0.2) return false;
+      return hasSpritePixel(SPRITES.wall, x % CHIP_W, y % CHIP_H);
+    }
+
+    function ladderPixelAt(x, y) {
+      if (x < 0 || x >= LOGICAL_WIDTH || y < 0 || y >= LOGICAL_HEIGHT) return false;
+      const col = Math.floor(x / CHIP_W);
+      const row = Math.floor(y / CHIP_H);
+      if (tileAt(col, row) !== "L") return false;
+      return hasSpritePixel(SPRITES.ladder, x % CHIP_W, y % CHIP_H);
+    }
+
+    function onLadder(entity) {
+      const midX = Math.floor(entity.x + entity.w / 2);
+      const torsoY = Math.floor(entity.y + entity.h / 2);
+      const footY = Math.floor(entity.y + entity.h - 1);
+      return ladderPixelAt(midX, torsoY) || ladderPixelAt(midX, footY);
+    }
+
+    function snapToLadder(entity) {
+      const midX = Math.floor(entity.x + entity.w / 2);
+      const col = Math.floor(midX / CHIP_W);
+      entity.x = col * CHIP_W;
+      entity.vx = 0;
+    }
+
+    function findSupportY(entity, maxDistance = 3) {
+      const leftX = Math.floor(entity.x + 1);
+      const rightX = Math.floor(entity.x + entity.w - 2);
+      const footBase = Math.floor(entity.y + entity.h);
+      for (let dy = 0; dy <= maxDistance; dy++) {
+        const sampleY = footBase + dy;
+        if (platformPixelAt(leftX, sampleY) || platformPixelAt(rightX, sampleY)) {
+          return sampleY;
+        }
+      }
+      return null;
+    }
+
+    function feetOnFloor(entity) {
+      return findSupportY(entity) !== null;
+    }
+
+    function snapToFloor(entity) {
+      const supportY = findSupportY(entity);
+      if (supportY === null) return;
+      entity.y = supportY - entity.h;
+      entity.vy = 0;
+    }
+
+    function digHole() {
+      const p = state.player;
+      if (!p) return;
+      if (p.digging > 0) return;
+      const dir = p.facing;
+      const col = Math.floor((p.x + p.w / 2) / CHIP_W) + dir;
+      const row = Math.floor((p.y + p.h) / CHIP_H);
+      if (tileAt(col, row) !== "F") return;
+      if (holeAt(col, row)) return;
+
+      p.digging = CONFIG.digDuration;
+      state.holes.push({ col, row, timer: CONFIG.holeOpenTime, phase: "open" });
+    }
+
+    function updateHoles(dt) {
+      state.holes.forEach((h) => {
+        if (h.phase === "open") {
+          h.timer -= dt;
+          if (h.timer <= 0) {
+            h.phase = "closing";
+            h.timer = CONFIG.holeCloseTime;
+          }
+        } else if (h.phase === "closing") {
+          h.timer -= dt;
+        }
+      });
+      state.holes = state.holes.filter((h) => h.phase !== "closing" || h.timer > 0);
+    }
+
+    function applyMovement(entity, dt, speedX, speedY) {
+      entity.x += speedX * dt;
+      entity.y += speedY * dt;
+    }
+
+    function keepInBounds(entity) {
+      entity.x = Math.max(0, Math.min(entity.x, LOGICAL_WIDTH - entity.w));
+      entity.y = Math.max(0, Math.min(entity.y, LOGICAL_HEIGHT - entity.h));
+    }
+
+    function updatePlayer(dt) {
+      const p = state.player;
+      if (!p) return;
+
+      if (p.digging > 0) {
+        p.digging -= dt;
+        if (p.digging < 0) p.digging = 0;
+      }
+
+      const left = KEYS.has("ArrowLeft");
+      const right = KEYS.has("ArrowRight");
+      const up = KEYS.has("ArrowUp");
+      const down = KEYS.has("ArrowDown");
+
+      if (left) p.facing = -1;
+      if (right) p.facing = 1;
+
+      const grounded = feetOnFloor(p);
+      const canClimb = onLadder(p);
+      p.onLadder = canClimb && (up || down);
+
+      if (p.digging === 0 && grounded) {
+        const vx = (right ? 1 : 0) - (left ? 1 : 0);
+        p.vx = vx * CONFIG.moveSpeed;
+      } else {
+        p.vx = 0;
+      }
+
+      if (p.onLadder) {
+        snapToLadder(p);
+        p.vy = ((down ? 1 : 0) - (up ? 1 : 0)) * CONFIG.climbSpeed;
+      } else {
+        p.vy += CONFIG.gravity * dt;
+      }
+
+      applyMovement(p, dt, p.vx, p.vy);
+
+      if (!p.onLadder && p.vy >= 0 && feetOnFloor(p)) {
+        snapToFloor(p);
+      }
+
+      if (p.onLadder && Math.abs(p.vy) > 1) {
+        p.climbAnim += dt * 8;
+      } else {
+        p.climbAnim = 0;
+      }
+
+      if (Math.abs(p.vx) > 1 && !p.onLadder) {
+        p.anim += dt * 8;
+      } else {
+        p.anim = 0;
+      }
+
+      keepInBounds(p);
+    }
+
+    function enemyAI(enemy, dt) {
+      if (!state.player) {
+        enemy.vx = 0;
+        enemy.vy = 0;
+        return;
+      }
+      if (enemy.state === "trapped") return;
+
+      const p = state.player;
+      const ex = enemy.x + enemy.w / 2;
+      const ey = enemy.y + enemy.h / 2;
+      const px = p.x + p.w / 2;
+      const py = p.y + p.h / 2;
+
+      const sameRow = Math.floor(ey / TILE) === Math.floor(py / TILE);
+      const ladderHere = onLadder(enemy);
+
+      if (ladderHere && !sameRow) {
+        enemy.vy = py > ey ? CONFIG.climbSpeed * 0.85 : -CONFIG.climbSpeed * 0.85;
+        enemy.vx = 0;
+      } else {
+        enemy.vx = px > ex ? CONFIG.enemySpeed : -CONFIG.enemySpeed;
+        enemy.vy += CONFIG.gravity * dt;
+      }
+    }
+
+    function updateEnemy(enemy, dt) {
+      if (enemy.state === "trapped") {
+        enemy.trappedTimer -= dt;
+        enemy.vx = 0;
+        enemy.vy = 0;
+        if (enemy.trappedTimer <= 0) {
+          enemy.state = "walk";
+        }
+        return;
+      }
+
+      enemyAI(enemy, dt);
+      applyMovement(enemy, dt, enemy.vx, enemy.vy);
+
+      if (enemy.vy >= 0 && feetOnFloor(enemy)) {
+        snapToFloor(enemy);
+      }
+
+      const footRow = Math.floor((enemy.y + enemy.h) / CHIP_H);
+      const footCol = Math.floor((enemy.x + enemy.w / 2) / CHIP_W);
+      const hole = holeAt(footCol, footRow);
+      if (hole && hole.phase === "open" && enemy.vy >= 0) {
+        enemy.state = "trapped";
+        enemy.trappedTimer = CONFIG.enemyTrapTime;
+        enemy.y = footRow * CHIP_H - enemy.h + 1;
+        enemy.vy = 0;
+      }
+
+      keepInBounds(enemy);
+    }
+
+    function resolveStomp() {
+      const p = state.player;
+      if (!p) return;
+      if (!KEYS.has("ArrowDown")) return;
+
+      const pCol = Math.floor((p.x + p.w / 2) / CHIP_W);
+      const pRow = Math.floor((p.y + p.h) / CHIP_H) - 1;
+      state.enemies = state.enemies.filter((e) => {
+        if (e.state !== "trapped") return true;
+        const eCol = Math.floor((e.x + e.w / 2) / CHIP_W);
+        const eRow = Math.floor((e.y + e.h) / CHIP_H);
+        if (eCol === pCol && eRow === pRow + 1) {
+          state.score += 200;
+          return false;
+        }
+        return true;
+      });
+    }
+
+    function checkPlayerHit() {
+      const p = state.player;
+      if (!p) return;
+      for (const e of state.enemies) {
+        if (e.state === "trapped") continue;
+        const dx = Math.abs((p.x + p.w / 2) - (e.x + e.w / 2));
+        const dy = Math.abs((p.y + p.h / 2) - (e.y + e.h / 2));
+        if (dx < 4 && dy < 4) {
+          loseLife();
+          return;
+        }
+      }
+    }
+
+    function update(dt) {
+      if (state.mode !== "PLAY") return;
+
+      if (KEYS.has(" ")) digHole();
+      updateHoles(dt);
+      updatePlayer(dt);
+
+      state.enemies.forEach((e) => updateEnemy(e, dt));
+      resolveStomp();
+      checkPlayerHit();
+
+      if (state.enemies.length === 0) {
+        state.mode = "CLEAR";
+        setTimeout(nextStage, 900);
+      }
+    }
+
+    function drawMap() {
+      for (let row = 0; row < ROWS; row++) {
+        for (let col = 0; col < COLS; col++) {
+          const chip = tileAt(col, row);
+          const x = col * CHIP_W;
+          const y = row * CHIP_H;
+          if (chip === "F") drawSprite(SPRITES.wall, x, y);
+          if (chip === "L") drawSprite(SPRITES.ladder, x, y);
+        }
+      }
+
+      state.holes.forEach((h) => {
+        ctx.fillStyle = h.phase === "closing" ? "#3a2e2e" : "#000";
+        ctx.fillRect(h.col * CHIP_W, h.row * CHIP_H, CHIP_W, CHIP_H);
+      });
+    }
+
+    function drawEntities() {
+      const p = state.player;
+      if (p) {
+        if (p.onLadder && Math.abs(p.vy) > 1) {
+          const frame = Math.floor(p.climbAnim) % SPRITES.playerClimb.length;
+          drawSprite(SPRITES.playerClimb[frame], Math.round(p.x), Math.round(p.y));
+        } else {
+          const frame = p.anim === 0 ? 0 : Math.floor(p.anim) % SPRITES.player.length;
+          drawSprite(SPRITES.player[frame], Math.round(p.x), Math.round(p.y), p.facing > 0);
+        }
+      }
+
+      state.enemies.forEach((e) => {
+        ctx.fillStyle = e.state === "trapped" ? "#d94bff" : "#ff375f";
+        ctx.fillRect(e.x + 1, e.y + 1, e.w - 2, e.h - 2);
+      });
+    }
+
+    function drawOverlay() {
+      if (state.mode === "TITLE") {
+        ctx.fillStyle = "rgba(0,0,0,0.65)";
+        ctx.fillRect(0, 0, buffer.width, buffer.height);
+        ctx.fillStyle = "#00c2ff";
+        ctx.font = "6px 'Press Start 2P', monospace";
+        ctx.fillText("SPACE PANIC", 34, 40);
+        ctx.font = "4px 'Press Start 2P', monospace";
+        ctx.fillText("PRESS ENTER", 44, 50);
+      }
+    }
+
+    function drawHUD() {
+      hud.textContent = `SCORE ${state.score.toString().padStart(5, "0")}   LIVES ${state.lives}   STAGE ${state.stage}`;
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, buffer.width, buffer.height);
+      drawMap();
+      drawEntities();
+      drawOverlay();
+      drawHUD();
+
+      screenCtx.clearRect(0, 0, canvas.width, canvas.height);
+      screenCtx.drawImage(buffer, 0, 0, canvas.width, canvas.height);
+    }
+
+    function loop(ts) {
+      if (!state.lastTime) state.lastTime = ts;
+      const dt = Math.min(0.033, (ts - state.lastTime) / 1000);
+      state.lastTime = ts;
+      update(dt);
+      render();
+      requestAnimationFrame(loop);
+    }
+
+    function getColor(colorCode) {
+      switch (colorCode) {
+        case 0: return "black";
+        case 1: return "blue";
+        case 2: return "red";
+        case 3: return "purple";
+        case 4: return "lime";
+        case 5: return "aqua";
+        case 6: return "yellow";
+        case 7: return "white";
+        default: return "black";
+      }
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+    resetPlayer();
+    spawnEnemies();
+    requestAnimationFrame(loop);
+  </script>
+</body>
+
+</html>
