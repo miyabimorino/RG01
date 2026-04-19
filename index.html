@@ -104,6 +104,9 @@
     const CHIP_H = 4;
     const COLS = 20;
     const ROWS = 25;
+    const MAP_EMPTY = 0;
+    const MAP_FLOOR = 1;
+    const MAP_LADDER = 2;
     const FLOOR_ROWS = [4, 9, 14, 19, 24];
     const LADDER_GROUPS = [
       { startRow: 3, endRow: 8, count: 3 },
@@ -228,10 +231,6 @@
       }
     }
 
-    function hasSpritePixel(sprite, x, y) {
-      return sprite.some((cell) => cell.x === x && cell.y === y);
-    }
-
     function randomLadderChipColumn() {
       const x = Math.floor(Math.random() * 7) * 16 + 16;
       return Math.floor(x / CHIP_W);
@@ -249,12 +248,12 @@
     });
     window.addEventListener("keyup", (e) => KEYS.delete(e.key));
 
-    function makeMap() {
-      const map = Array.from({ length: ROWS }, () => Array(COLS).fill("."));
+    function makeStageMap() {
+      const map = Array.from({ length: ROWS }, () => Array(COLS).fill(MAP_EMPTY));
 
       FLOOR_ROWS.forEach((row) => {
         for (let col = 0; col < COLS; col++) {
-          map[row][col] = "F";
+          map[row][col] = MAP_FLOOR;
         }
       });
 
@@ -264,8 +263,9 @@
           usedCols.add(randomLadderChipColumn());
         }
         usedCols.forEach((col) => {
-          for (let row = group.startRow; row <= group.endRow; row++) {
-            map[row][col] = "L";
+          const ladderTopRow = Math.max(group.startRow - 1, 0);
+          for (let row = ladderTopRow; row <= group.endRow; row++) {
+            map[row][col] = MAP_LADDER;
           }
         });
       });
@@ -273,12 +273,14 @@
       return map;
     }
 
+    const initialMap = makeStageMap();
+
     const state = {
       mode: "TITLE",
       score: 0,
       lives: 3,
       stage: 1,
-      map: makeMap(),
+      map: initialMap,
       holes: [],
       player: null,
       enemies: [],
@@ -295,9 +297,16 @@
         vy: 0,
         facing: 1,
         onLadder: false,
+        supportLockRow: null,
         digging: 0,
         anim: 0,
         climbAnim: 0,
+        moveFlags: {
+          left: false,
+          right: false,
+          up: false,
+          down: false,
+        },
       };
     }
 
@@ -320,19 +329,21 @@
     }
 
     function startGame() {
+      const stageMap = makeStageMap();
       state.mode = "PLAY";
       state.score = 0;
       state.lives = 3;
       state.stage = 1;
-      state.map = makeMap();
+      state.map = stageMap;
       state.holes = [];
       resetPlayer();
       spawnEnemies();
     }
 
     function nextStage() {
+      const stageMap = makeStageMap();
       state.stage += 1;
-      state.map = makeMap();
+      state.map = stageMap;
       state.holes = [];
       resetPlayer();
       spawnEnemies();
@@ -351,46 +362,106 @@
       }
     }
 
-    function tileAt(col, row) {
-      if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return ".";
+    function mapValueAt(col, row) {
+      if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return MAP_EMPTY;
       return state.map[row][col];
+    }
+
+    function pixelToMap(x, y) {
+      return {
+        col: Math.floor(x / CHIP_W),
+        row: Math.floor(y / CHIP_H),
+      };
     }
 
     function holeAt(col, row) {
       return state.holes.find((h) => h.col === col && h.row === row);
     }
 
-    function platformPixelAt(x, y) {
-      if (x < 0 || x >= LOGICAL_WIDTH || y < 0 || y >= LOGICAL_HEIGHT) return false;
-      const col = Math.floor(x / CHIP_W);
-      const row = Math.floor(y / CHIP_H);
-      if (tileAt(col, row) !== "F") return false;
+    function hasFloorAtCell(col, row) {
+      if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return false;
+      return mapValueAt(col, row) === MAP_FLOOR;
+    }
+
+    function hasLadderAtCell(col, row) {
+      if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return false;
+      return mapValueAt(col, row) === MAP_LADDER;
+    }
+
+    function floorBlockedByHole(col, row) {
       const hole = holeAt(col, row);
-      if (hole && hole.phase === "open") return false;
-      if (hole && hole.phase === "closing" && hole.timer >= 0.2) return false;
-      return hasSpritePixel(SPRITES.wall, x % CHIP_W, y % CHIP_H);
+      if (!hole) return false;
+      if (hole.phase === "open") return true;
+      if (hole.phase === "closing" && hole.timer >= 0.2) return true;
+      return false;
     }
 
-    function ladderPixelAt(x, y) {
+    function floorAtPixel(x, y) {
       if (x < 0 || x >= LOGICAL_WIDTH || y < 0 || y >= LOGICAL_HEIGHT) return false;
-      const col = Math.floor(x / CHIP_W);
-      const row = Math.floor(y / CHIP_H);
-      if (tileAt(col, row) !== "L") return false;
-      return hasSpritePixel(SPRITES.ladder, x % CHIP_W, y % CHIP_H);
+      const { col, row } = pixelToMap(x, y);
+      if (!hasFloorAtCell(col, row)) return false;
+      if (floorBlockedByHole(col, row)) return false;
+      return true;
     }
 
-    function onLadder(entity) {
-      const midX = Math.floor(entity.x + entity.w / 2);
-      const torsoY = Math.floor(entity.y + entity.h / 2);
-      const footY = Math.floor(entity.y + entity.h - 1);
-      return ladderPixelAt(midX, torsoY) || ladderPixelAt(midX, footY);
+    function ladderAtPixel(x, y) {
+      if (x < 0 || x >= LOGICAL_WIDTH || y < 0 || y >= LOGICAL_HEIGHT) return false;
+      const { col, row } = pixelToMap(x, y);
+      return hasLadderAtCell(col, row);
     }
 
-    function snapToLadder(entity) {
-      const midX = Math.floor(entity.x + entity.w / 2);
-      const col = Math.floor(midX / CHIP_W);
-      entity.x = col * CHIP_W;
-      entity.vx = 0;
+    function isAlignedToGrid(value, size) {
+      return Math.abs(value - Math.round(value / size) * size) < 0.001;
+    }
+
+    function snapToGrid(value, size) {
+      return Math.round(value / size) * size;
+    }
+
+    function entityColumn(entity) {
+      return Math.round(entity.x / CHIP_W);
+    }
+
+    function entityTopRow(entity) {
+      return Math.floor(entity.y / CHIP_H);
+    }
+
+    function entityBottomRow(entity) {
+      return Math.floor((entity.y + entity.h - 1) / CHIP_H);
+    }
+
+    function entitySupportRow(entity) {
+      return Math.floor((entity.y + entity.h) / CHIP_H);
+    }
+
+    function entityTouchesLadder(entity) {
+      const col = entityColumn(entity);
+      const topRow = entityTopRow(entity);
+      const bottomRow = entityBottomRow(entity);
+      for (let row = topRow; row <= bottomRow; row++) {
+        if (hasLadderAtCell(col, row)) return true;
+      }
+      return false;
+    }
+
+    function ladderAboveEntity(entity) {
+      return hasLadderAtCell(entityColumn(entity), entityTopRow(entity) - 1);
+    }
+
+    function ladderBelowEntity(entity) {
+      return hasLadderAtCell(entityColumn(entity), entitySupportRow(entity));
+    }
+
+    function ladderAligned(entity) {
+      return isAlignedToGrid(entity.x, CHIP_W);
+    }
+
+    function verticalAligned(entity) {
+      return isAlignedToGrid(entity.y, CHIP_H);
+    }
+
+    function atDecisionPoint(entity) {
+      return ladderAligned(entity) && verticalAligned(entity);
     }
 
     function findSupportY(entity, maxDistance = 3) {
@@ -399,7 +470,7 @@
       const footBase = Math.floor(entity.y + entity.h);
       for (let dy = 0; dy <= maxDistance; dy++) {
         const sampleY = footBase + dy;
-        if (platformPixelAt(leftX, sampleY) || platformPixelAt(rightX, sampleY)) {
+        if (floorAtPixel(leftX, sampleY) || floorAtPixel(rightX, sampleY)) {
           return sampleY;
         }
       }
@@ -410,6 +481,13 @@
       return findSupportY(entity) !== null;
     }
 
+    function footOnFloorMap(entity) {
+      const leftX = Math.floor(entity.x + 1);
+      const rightX = Math.floor(entity.x + entity.w - 2);
+      const footY = Math.floor(entity.y + entity.h);
+      return floorAtPixel(leftX, footY) || floorAtPixel(rightX, footY);
+    }
+
     function snapToFloor(entity) {
       const supportY = findSupportY(entity);
       if (supportY === null) return;
@@ -417,14 +495,68 @@
       entity.vy = 0;
     }
 
+    function canStandOnCell(col, row) {
+      return hasFloorAtCell(col, row) && !floorBlockedByHole(col, row);
+    }
+
+    function canMoveHorizontallyIntoCell(col, row) {
+      if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return false;
+      if (canStandOnCell(col, row)) return true;
+      return hasLadderAtCell(col, row);
+    }
+
+    function hasSideFloor(col, row) {
+      return canStandOnCell(col - 1, row) || canStandOnCell(col + 1, row);
+    }
+
+    function canStayOnSupportRow(entity, row) {
+      const col = entityColumn(entity);
+      if (row < 0 || row >= ROWS) return false;
+      return canStandOnCell(col, row) || hasLadderAtCell(col, row);
+    }
+
+    function refreshPlayerMoveFlags(player) {
+      if (!atDecisionPoint(player)) return;
+
+      const col = entityColumn(player);
+      const supportRow = entitySupportRow(player);
+      const ladderAbove = ladderAboveEntity(player);
+      const ladderBelow = ladderBelowEntity(player);
+      const standing = canStandOnCell(col, supportRow);
+      const supportLocked = player.supportLockRow === supportRow;
+      const canStepSideways = standing || supportLocked || player.onLadder;
+
+      player.moveFlags.left = col > 0 && canStepSideways && canMoveHorizontallyIntoCell(col - 1, supportRow);
+      player.moveFlags.right = col < COLS - 1 && canStepSideways && canMoveHorizontallyIntoCell(col + 1, supportRow);
+      player.moveFlags.up = ladderAbove;
+      player.moveFlags.down = ladderBelow;
+    }
+
+    function moveToNextBoundary(position, delta, size) {
+      if (delta === 0) return position;
+      const nextPosition = position + delta;
+      if (delta > 0) {
+        const nextBoundary = Math.ceil((position + 0.001) / size) * size;
+        if (!isAlignedToGrid(position, size) && nextPosition > nextBoundary) {
+          return nextBoundary;
+        }
+      } else {
+        const nextBoundary = Math.floor((position - 0.001) / size) * size;
+        if (!isAlignedToGrid(position, size) && nextPosition < nextBoundary) {
+          return nextBoundary;
+        }
+      }
+      return nextPosition;
+    }
+
     function digHole() {
       const p = state.player;
       if (!p) return;
       if (p.digging > 0) return;
       const dir = p.facing;
-      const col = Math.floor((p.x + p.w / 2) / CHIP_W) + dir;
-      const row = Math.floor((p.y + p.h) / CHIP_H);
-      if (tileAt(col, row) !== "F") return;
+      const col = entityColumn(p) + dir;
+      const row = entitySupportRow(p);
+      if (!hasFloorAtCell(col, row)) return;
       if (holeAt(col, row)) return;
 
       p.digging = CONFIG.digDuration;
@@ -456,6 +588,19 @@
       entity.y = Math.max(0, Math.min(entity.y, LOGICAL_HEIGHT - entity.h));
     }
 
+    function canExitLadder(entity, direction) {
+      const targetCol = entityColumn(entity) + direction;
+      const supportRow = entitySupportRow(entity);
+      if (targetCol < 0 || targetCol >= COLS) return false;
+      return hasFloorAtCell(targetCol, supportRow) && !floorBlockedByHole(targetCol, supportRow);
+    }
+
+    function lockToSupportRow(entity, row) {
+      entity.supportLockRow = row;
+      entity.y = row * CHIP_H - entity.h;
+      entity.vy = 0;
+    }
+
     function updatePlayer(dt) {
       const p = state.player;
       if (!p) return;
@@ -473,28 +618,105 @@
       if (left) p.facing = -1;
       if (right) p.facing = 1;
 
-      const grounded = feetOnFloor(p);
-      const canClimb = onLadder(p);
-      p.onLadder = canClimb && (up || down);
+      if (!p.onLadder && p.vy >= 0 && feetOnFloor(p)) {
+        snapToFloor(p);
+      }
 
-      if (p.digging === 0 && grounded) {
-        const vx = (right ? 1 : 0) - (left ? 1 : 0);
-        p.vx = vx * CONFIG.moveSpeed;
-      } else {
+      if (atDecisionPoint(p)) {
+        p.x = snapToGrid(p.x, CHIP_W);
+        p.y = snapToGrid(p.y, CHIP_H);
+        refreshPlayerMoveFlags(p);
+
         p.vx = 0;
+        p.vy = 0;
+
+        if (p.digging === 0) {
+          const currentCol = entityColumn(p);
+          const currentSupportRow = entitySupportRow(p);
+          const ladderHere = entityTouchesLadder(p);
+          const ladderAbove = ladderAboveEntity(p);
+          const exitSupportRow = currentSupportRow - 1;
+          const canStepOffLadderAtTop = p.onLadder
+            && up
+            && !down
+            && ladderHere
+            && !ladderAbove
+            && hasSideFloor(currentCol, exitSupportRow);
+
+          if (canStepOffLadderAtTop) {
+            p.onLadder = false;
+            lockToSupportRow(p, exitSupportRow);
+          } else if (up && !down && p.moveFlags.up) {
+            p.onLadder = true;
+            p.supportLockRow = null;
+            p.vy = -CONFIG.climbSpeed;
+          } else if (down && !up && p.moveFlags.down) {
+            p.onLadder = true;
+            p.supportLockRow = null;
+            p.vy = CONFIG.climbSpeed;
+          } else if (left && !right && p.moveFlags.left) {
+            p.onLadder = false;
+            lockToSupportRow(p, entitySupportRow(p));
+            p.vx = -CONFIG.moveSpeed;
+          } else if (right && !left && p.moveFlags.right) {
+            p.onLadder = false;
+            lockToSupportRow(p, entitySupportRow(p));
+            p.vx = CONFIG.moveSpeed;
+          } else {
+            const ladderStillUsable = entityTouchesLadder(p) || ladderAboveEntity(p) || ladderBelowEntity(p);
+            p.onLadder = p.onLadder && ladderStillUsable;
+            if (!p.onLadder && feetOnFloor(p)) {
+              p.supportLockRow = entitySupportRow(p);
+            }
+          }
+        } else {
+          p.onLadder = false;
+          p.supportLockRow = null;
+        }
       }
 
       if (p.onLadder) {
-        snapToLadder(p);
-        p.vy = ((down ? 1 : 0) - (up ? 1 : 0)) * CONFIG.climbSpeed;
+        p.x = snapToGrid(p.x, CHIP_W);
+        p.supportLockRow = null;
+      } else if (p.supportLockRow !== null) {
+        p.y = p.supportLockRow * CHIP_H - p.h;
+        p.vy = 0;
+      } else if (feetOnFloor(p)) {
+        snapToFloor(p);
+        p.supportLockRow = entitySupportRow(p);
+        p.vy = 0;
       } else {
+        p.vx = 0;
         p.vy += CONFIG.gravity * dt;
       }
 
-      applyMovement(p, dt, p.vx, p.vy);
+      p.x = moveToNextBoundary(p.x, p.vx * dt, CHIP_W);
+      p.y = moveToNextBoundary(p.y, p.vy * dt, CHIP_H);
 
       if (!p.onLadder && p.vy >= 0 && feetOnFloor(p)) {
         snapToFloor(p);
+        p.supportLockRow = entitySupportRow(p);
+      }
+
+      if (atDecisionPoint(p)) {
+        p.x = snapToGrid(p.x, CHIP_W);
+        p.y = snapToGrid(p.y, CHIP_H);
+        const ladderStillUsable = entityTouchesLadder(p) || ladderAboveEntity(p) || ladderBelowEntity(p);
+        if (p.onLadder && !ladderStillUsable) {
+          p.onLadder = false;
+          p.vy = 0;
+        }
+        if (!p.onLadder) {
+          if (footOnFloorMap(p)) {
+            p.supportLockRow = entitySupportRow(p);
+          } else if (p.supportLockRow !== null && canStayOnSupportRow(p, p.supportLockRow)) {
+            p.y = p.supportLockRow * CHIP_H - p.h;
+            p.vy = 0;
+          } else {
+            p.supportLockRow = null;
+          }
+        }
+        refreshPlayerMoveFlags(p);
       }
 
       if (p.onLadder && Math.abs(p.vy) > 1) {
@@ -527,7 +749,7 @@
       const py = p.y + p.h / 2;
 
       const sameRow = Math.floor(ey / TILE) === Math.floor(py / TILE);
-      const ladderHere = onLadder(enemy);
+      const ladderHere = entityTouchesLadder(enemy);
 
       if (ladderHere && !sameRow) {
         enemy.vy = py > ey ? CONFIG.climbSpeed * 0.85 : -CONFIG.climbSpeed * 0.85;
@@ -622,11 +844,11 @@
     function drawMap() {
       for (let row = 0; row < ROWS; row++) {
         for (let col = 0; col < COLS; col++) {
-          const chip = tileAt(col, row);
+          const chip = mapValueAt(col, row);
           const x = col * CHIP_W;
           const y = row * CHIP_H;
-          if (chip === "F") drawSprite(SPRITES.wall, x, y);
-          if (chip === "L") drawSprite(SPRITES.ladder, x, y);
+          if (chip === MAP_FLOOR) drawSprite(SPRITES.wall, x, y);
+          if (chip === MAP_LADDER) drawSprite(SPRITES.ladder, x, y);
         }
       }
 
