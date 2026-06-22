@@ -74,6 +74,7 @@
     const ctx = buffer.getContext("2d");
     ctx.imageSmoothingEnabled = false;
 
+    // 画面サイズに合わせてキャンバスとHUDの表示サイズを調整する。
     function resizeCanvas() {
       const bodyStyle = window.getComputedStyle(document.body);
       const horizontalPadding = (parseFloat(bodyStyle.paddingLeft) || 0) + (parseFloat(bodyStyle.paddingRight) || 0);
@@ -222,6 +223,7 @@
       ],
     };
 
+    // ピクセル定義されたスプライトを指定位置に描画する。
     function drawSprite(sprite, x, y, flipX = false) {
       const spriteWidth = sprite.reduce((max, cell) => Math.max(max, cell.x), 0) + 1;
       for (const cell of sprite) {
@@ -231,23 +233,23 @@
       }
     }
 
+    // 梯子を配置するチップ列をランダムに選ぶ。
     function randomLadderChipColumn() {
       const x = Math.floor(Math.random() * 7) * 16 + 16;
       return Math.floor(x / CHIP_W);
     }
 
     const KEYS = new Set();
+    const CONTROL_KEYS = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "];
+
     window.addEventListener("keydown", (e) => {
       KEYS.add(e.key);
-      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) {
-        e.preventDefault();
-      }
-      if (e.key === "Enter" && state.mode === "TITLE") {
-        startGame();
-      }
+      if (CONTROL_KEYS.includes(e.key)) e.preventDefault();
+      if (e.key === "Enter" && state.mode === "TITLE") startGame();
     });
     window.addEventListener("keyup", (e) => KEYS.delete(e.key));
 
+    // 床と梯子を配置したステージマップを生成する。
     function makeStageMap() {
       const map = Array.from({ length: ROWS }, () => Array(COLS).fill(MAP_EMPTY));
 
@@ -273,23 +275,42 @@
       return map;
     }
 
-    const initialMap = makeStageMap();
-
     const state = {
       mode: "TITLE",
       score: 0,
       lives: 3,
       stage: 1,
-      map: initialMap,
+      map: makeStageMap(),
       holes: [],
       player: null,
       enemies: [],
       lastTime: 0,
     };
 
-    function resetPlayer() {
-      state.player = {
-        x: 1 * TILE,
+    // 指定したマップ座標がステージ範囲内か判定する。
+    function inMapBounds(col, row) {
+      return col >= 0 && col < COLS && row >= 0 && row < ROWS;
+    }
+
+    // 指定したピクセル座標が描画領域内か判定する。
+    function inScreenBounds(x, y) {
+      return x >= 0 && x < LOGICAL_WIDTH && y >= 0 && y < LOGICAL_HEIGHT;
+    }
+
+    // プレイヤー用の移動可能方向フラグを初期化する。
+    function createMoveFlags() {
+      return {
+        left: false,
+        right: false,
+        up: false,
+        down: false,
+      };
+    }
+
+    // プレイヤーの初期データを作成する。
+    function createPlayer() {
+      return {
+        x: TILE,
         y: 84,
         w: 8,
         h: 12,
@@ -301,55 +322,62 @@
         digging: 0,
         anim: 0,
         climbAnim: 0,
-        moveFlags: {
-          left: false,
-          right: false,
-          up: false,
-          down: false,
-        },
+        moveFlags: createMoveFlags(),
       };
     }
 
-    function spawnEnemies() {
-      const base = [
-        { x: 64, y: 8 },
-        { x: 72, y: 28 },
-        { x: 96, y: 48 },
-      ];
-      state.enemies = base.map((p) => ({
-        x: p.x,
-        y: p.y,
+    // 敵キャラクターの初期データを作成する。
+    function createEnemy(x, y) {
+      return {
+        x,
+        y,
         w: 8,
         h: 8,
         vx: 0,
         vy: 0,
         state: "walk",
         trappedTimer: 0,
-      }));
+      };
     }
 
-    function startGame() {
-      const stageMap = makeStageMap();
+    // マップ、穴、プレイヤー、敵をまとめてステージ開始状態に戻す。
+    function resetStage(stage) {
+      state.stage = stage;
+      state.map = makeStageMap();
+      state.holes = [];
+      resetPlayer();
+      spawnEnemies();
       state.mode = "PLAY";
+    }
+
+    // プレイヤーの位置や移動状態を初期状態に戻す。
+    function resetPlayer() {
+      state.player = createPlayer();
+    }
+
+    // 現在のステージに出現する敵キャラクターを生成する。
+    function spawnEnemies() {
+      const base = [
+        { x: 64, y: 8 },
+        { x: 72, y: 28 },
+        { x: 96, y: 48 },
+      ];
+      state.enemies = base.map((p) => createEnemy(p.x, p.y));
+    }
+
+    // スコアや残機を初期化して新しいゲームを開始する。
+    function startGame() {
       state.score = 0;
       state.lives = 3;
-      state.stage = 1;
-      state.map = stageMap;
-      state.holes = [];
-      resetPlayer();
-      spawnEnemies();
+      resetStage(1);
     }
 
+    // ステージ番号を進め、新しいマップと敵配置で再開する。
     function nextStage() {
-      const stageMap = makeStageMap();
-      state.stage += 1;
-      state.map = stageMap;
-      state.holes = [];
-      resetPlayer();
-      spawnEnemies();
-      state.mode = "PLAY";
+      resetStage(state.stage + 1);
     }
 
+    // プレイヤーの残機を減らし、ゲームオーバーまたは復帰処理を行う。
     function loseLife() {
       state.lives -= 1;
       if (state.lives <= 0) {
@@ -362,11 +390,13 @@
       }
     }
 
+    // 指定したマップ座標にあるチップ種別を取得する。
     function mapValueAt(col, row) {
-      if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return MAP_EMPTY;
+      if (!inMapBounds(col, row)) return MAP_EMPTY;
       return state.map[row][col];
     }
 
+    // ピクセル座標をマップの列・行座標に変換する。
     function pixelToMap(x, y) {
       return {
         col: Math.floor(x / CHIP_W),
@@ -374,20 +404,22 @@
       };
     }
 
+    // 指定したマップ座標に掘られた穴があるか探す。
     function holeAt(col, row) {
       return state.holes.find((h) => h.col === col && h.row === row);
     }
 
+    // 指定したマップ座標が床チップかどうかを判定する。
     function hasFloorAtCell(col, row) {
-      if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return false;
       return mapValueAt(col, row) === MAP_FLOOR;
     }
 
+    // 指定したマップ座標が梯子チップかどうかを判定する。
     function hasLadderAtCell(col, row) {
-      if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return false;
       return mapValueAt(col, row) === MAP_LADDER;
     }
 
+    // 穴の状態により、その床が通行・着地できない状態か判定する。
     function floorBlockedByHole(col, row) {
       const hole = holeAt(col, row);
       if (!hole) return false;
@@ -396,44 +428,44 @@
       return false;
     }
 
+    // 指定したピクセル位置に有効な床があるか判定する。
     function floorAtPixel(x, y) {
-      if (x < 0 || x >= LOGICAL_WIDTH || y < 0 || y >= LOGICAL_HEIGHT) return false;
+      if (!inScreenBounds(x, y)) return false;
       const { col, row } = pixelToMap(x, y);
-      if (!hasFloorAtCell(col, row)) return false;
-      if (floorBlockedByHole(col, row)) return false;
-      return true;
+      return canStandOnCell(col, row);
     }
 
-    function ladderAtPixel(x, y) {
-      if (x < 0 || x >= LOGICAL_WIDTH || y < 0 || y >= LOGICAL_HEIGHT) return false;
-      const { col, row } = pixelToMap(x, y);
-      return hasLadderAtCell(col, row);
-    }
-
+    // 座標が指定グリッド幅にほぼ揃っているか判定する。
     function isAlignedToGrid(value, size) {
       return Math.abs(value - Math.round(value / size) * size) < 0.001;
     }
 
+    // 座標を最も近いグリッド位置に丸める。
     function snapToGrid(value, size) {
       return Math.round(value / size) * size;
     }
 
+    // エンティティの現在位置からマップ列を求める。
     function entityColumn(entity) {
       return Math.round(entity.x / CHIP_W);
     }
 
+    // エンティティ上端が属するマップ行を求める。
     function entityTopRow(entity) {
       return Math.floor(entity.y / CHIP_H);
     }
 
+    // エンティティ下端が属するマップ行を求める。
     function entityBottomRow(entity) {
       return Math.floor((entity.y + entity.h - 1) / CHIP_H);
     }
 
+    // エンティティの足元が乗る支え行を求める。
     function entitySupportRow(entity) {
       return Math.floor((entity.y + entity.h) / CHIP_H);
     }
 
+    // エンティティが現在の列で梯子に触れているか判定する。
     function entityTouchesLadder(entity) {
       const col = entityColumn(entity);
       const topRow = entityTopRow(entity);
@@ -444,26 +476,32 @@
       return false;
     }
 
+    // エンティティの上方向に登れる梯子があるか判定する。
     function ladderAboveEntity(entity) {
       return hasLadderAtCell(entityColumn(entity), entityTopRow(entity) - 1);
     }
 
+    // エンティティの下方向に降りられる梯子があるか判定する。
     function ladderBelowEntity(entity) {
       return hasLadderAtCell(entityColumn(entity), entitySupportRow(entity));
     }
 
+    // エンティティの横位置が梯子列に揃っているか判定する。
     function ladderAligned(entity) {
       return isAlignedToGrid(entity.x, CHIP_W);
     }
 
+    // エンティティの縦位置がチップ境界に揃っているか判定する。
     function verticalAligned(entity) {
       return isAlignedToGrid(entity.y, CHIP_H);
     }
 
+    // 移動方向を切り替えられるグリッド交点にいるか判定する。
     function atDecisionPoint(entity) {
       return ladderAligned(entity) && verticalAligned(entity);
     }
 
+    // エンティティの足元近くにある床のY座標を探す。
     function findSupportY(entity, maxDistance = 3) {
       const leftX = Math.floor(entity.x + 1);
       const rightX = Math.floor(entity.x + entity.w - 2);
@@ -477,10 +515,12 @@
       return null;
     }
 
+    // エンティティの足元が床に支えられているか判定する。
     function feetOnFloor(entity) {
       return findSupportY(entity) !== null;
     }
 
+    // エンティティの足元ピクセルが床チップ上にあるか判定する。
     function footOnFloorMap(entity) {
       const leftX = Math.floor(entity.x + 1);
       const rightX = Math.floor(entity.x + entity.w - 2);
@@ -488,6 +528,7 @@
       return floorAtPixel(leftX, footY) || floorAtPixel(rightX, footY);
     }
 
+    // エンティティを直下の床にぴったり乗る位置へ補正する。
     function snapToFloor(entity) {
       const supportY = findSupportY(entity);
       if (supportY === null) return;
@@ -495,26 +536,31 @@
       entity.vy = 0;
     }
 
+    // 指定セルが穴で塞がれていない、立てる床か判定する。
     function canStandOnCell(col, row) {
       return hasFloorAtCell(col, row) && !floorBlockedByHole(col, row);
     }
 
+    // 横移動先のセルへ進入できるか判定する。
     function canMoveHorizontallyIntoCell(col, row) {
-      if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return false;
+      if (!inMapBounds(col, row)) return false;
       if (canStandOnCell(col, row)) return true;
       return hasLadderAtCell(col, row);
     }
 
+    // 指定セルの左右どちらかに立てる床があるか判定する。
     function hasSideFloor(col, row) {
       return canStandOnCell(col - 1, row) || canStandOnCell(col + 1, row);
     }
 
+    // エンティティが指定した支え行に留まれるか判定する。
     function canStayOnSupportRow(entity, row) {
       const col = entityColumn(entity);
-      if (row < 0 || row >= ROWS) return false;
+      if (!inMapBounds(col, row)) return false;
       return canStandOnCell(col, row) || hasLadderAtCell(col, row);
     }
 
+    // 現在位置からプレイヤーが進める方向フラグを更新する。
     function refreshPlayerMoveFlags(player) {
       if (!atDecisionPoint(player)) return;
 
@@ -532,6 +578,7 @@
       player.moveFlags.down = ladderBelow;
     }
 
+    // 移動中に次のグリッド境界を越えないよう座標を進める。
     function moveToNextBoundary(position, delta, size) {
       if (delta === 0) return position;
       const nextPosition = position + delta;
@@ -549,6 +596,7 @@
       return nextPosition;
     }
 
+    // プレイヤーの向いている方向の床に穴を掘る。
     function digHole() {
       const p = state.player;
       if (!p) return;
@@ -563,6 +611,7 @@
       state.holes.push({ col, row, timer: CONFIG.holeOpenTime, phase: "open" });
     }
 
+    // 穴の開閉タイマーを進め、閉じ終わった穴を削除する。
     function updateHoles(dt) {
       state.holes.forEach((h) => {
         if (h.phase === "open") {
@@ -578,29 +627,53 @@
       state.holes = state.holes.filter((h) => h.phase !== "closing" || h.timer > 0);
     }
 
-    function applyMovement(entity, dt, speedX, speedY) {
-      entity.x += speedX * dt;
-      entity.y += speedY * dt;
-    }
-
+    // エンティティが画面外に出ないよう座標を制限する。
     function keepInBounds(entity) {
       entity.x = Math.max(0, Math.min(entity.x, LOGICAL_WIDTH - entity.w));
       entity.y = Math.max(0, Math.min(entity.y, LOGICAL_HEIGHT - entity.h));
     }
 
-    function canExitLadder(entity, direction) {
-      const targetCol = entityColumn(entity) + direction;
-      const supportRow = entitySupportRow(entity);
-      if (targetCol < 0 || targetCol >= COLS) return false;
-      return hasFloorAtCell(targetCol, supportRow) && !floorBlockedByHole(targetCol, supportRow);
-    }
-
+    // エンティティを指定した支え行に固定し、落下速度を止める。
     function lockToSupportRow(entity, row) {
       entity.supportLockRow = row;
       entity.y = row * CHIP_H - entity.h;
       entity.vy = 0;
     }
 
+    // 現在押されている方向キーを扱いやすい形で取得する。
+    function readInput() {
+      return {
+        left: KEYS.has("ArrowLeft"),
+        right: KEYS.has("ArrowRight"),
+        up: KEYS.has("ArrowUp"),
+        down: KEYS.has("ArrowDown"),
+      };
+    }
+
+    // プレイヤーが床に乗れる状態なら、床位置と支え行を更新する。
+    function settlePlayerOnFloor(player) {
+      if (player.onLadder || player.vy < 0 || !feetOnFloor(player)) return false;
+      snapToFloor(player);
+      player.supportLockRow = entitySupportRow(player);
+      return true;
+    }
+
+    // 梯子移動や通常移動に応じてプレイヤーのアニメーション値を更新する。
+    function updatePlayerAnimation(player, dt) {
+      if (player.onLadder && Math.abs(player.vy) > 1) {
+        player.climbAnim += dt * 8;
+      } else {
+        player.climbAnim = 0;
+      }
+
+      if (Math.abs(player.vx) > 1 && !player.onLadder) {
+        player.anim += dt * 8;
+      } else {
+        player.anim = 0;
+      }
+    }
+
+    // 入力、重力、梯子移動、アニメーションを反映してプレイヤーを更新する。
     function updatePlayer(dt) {
       const p = state.player;
       if (!p) return;
@@ -610,17 +683,12 @@
         if (p.digging < 0) p.digging = 0;
       }
 
-      const left = KEYS.has("ArrowLeft");
-      const right = KEYS.has("ArrowRight");
-      const up = KEYS.has("ArrowUp");
-      const down = KEYS.has("ArrowDown");
+      const input = readInput();
 
-      if (left) p.facing = -1;
-      if (right) p.facing = 1;
+      if (input.left) p.facing = -1;
+      if (input.right) p.facing = 1;
 
-      if (!p.onLadder && p.vy >= 0 && feetOnFloor(p)) {
-        snapToFloor(p);
-      }
+      settlePlayerOnFloor(p);
 
       if (atDecisionPoint(p)) {
         p.x = snapToGrid(p.x, CHIP_W);
@@ -637,8 +705,8 @@
           const ladderAbove = ladderAboveEntity(p);
           const exitSupportRow = currentSupportRow - 1;
           const canStepOffLadderAtTop = p.onLadder
-            && up
-            && !down
+            && input.up
+            && !input.down
             && ladderHere
             && !ladderAbove
             && hasSideFloor(currentCol, exitSupportRow);
@@ -646,19 +714,19 @@
           if (canStepOffLadderAtTop) {
             p.onLadder = false;
             lockToSupportRow(p, exitSupportRow);
-          } else if (up && !down && p.moveFlags.up) {
+          } else if (input.up && !input.down && p.moveFlags.up) {
             p.onLadder = true;
             p.supportLockRow = null;
             p.vy = -CONFIG.climbSpeed;
-          } else if (down && !up && p.moveFlags.down) {
+          } else if (input.down && !input.up && p.moveFlags.down) {
             p.onLadder = true;
             p.supportLockRow = null;
             p.vy = CONFIG.climbSpeed;
-          } else if (left && !right && p.moveFlags.left) {
+          } else if (input.left && !input.right && p.moveFlags.left) {
             p.onLadder = false;
             lockToSupportRow(p, entitySupportRow(p));
             p.vx = -CONFIG.moveSpeed;
-          } else if (right && !left && p.moveFlags.right) {
+          } else if (input.right && !input.left && p.moveFlags.right) {
             p.onLadder = false;
             lockToSupportRow(p, entitySupportRow(p));
             p.vx = CONFIG.moveSpeed;
@@ -693,10 +761,7 @@
       p.x = moveToNextBoundary(p.x, p.vx * dt, CHIP_W);
       p.y = moveToNextBoundary(p.y, p.vy * dt, CHIP_H);
 
-      if (!p.onLadder && p.vy >= 0 && feetOnFloor(p)) {
-        snapToFloor(p);
-        p.supportLockRow = entitySupportRow(p);
-      }
+      settlePlayerOnFloor(p);
 
       if (atDecisionPoint(p)) {
         p.x = snapToGrid(p.x, CHIP_W);
@@ -719,21 +784,11 @@
         refreshPlayerMoveFlags(p);
       }
 
-      if (p.onLadder && Math.abs(p.vy) > 1) {
-        p.climbAnim += dt * 8;
-      } else {
-        p.climbAnim = 0;
-      }
-
-      if (Math.abs(p.vx) > 1 && !p.onLadder) {
-        p.anim += dt * 8;
-      } else {
-        p.anim = 0;
-      }
-
+      updatePlayerAnimation(p, dt);
       keepInBounds(p);
     }
 
+    // プレイヤー位置をもとに敵の移動方向と速度を決める。
     function enemyAI(enemy, dt) {
       if (!state.player) {
         enemy.vx = 0;
@@ -760,6 +815,7 @@
       }
     }
 
+    // 敵の移動、落下、穴への捕獲状態を更新する。
     function updateEnemy(enemy, dt) {
       if (enemy.state === "trapped") {
         enemy.trappedTimer -= dt;
@@ -772,7 +828,8 @@
       }
 
       enemyAI(enemy, dt);
-      applyMovement(enemy, dt, enemy.vx, enemy.vy);
+      enemy.x += enemy.vx * dt;
+      enemy.y += enemy.vy * dt;
 
       if (enemy.vy >= 0 && feetOnFloor(enemy)) {
         snapToFloor(enemy);
@@ -791,6 +848,7 @@
       keepInBounds(enemy);
     }
 
+    // 下入力で穴に捕まった敵を踏みつけ、スコア加算と敵削除を行う。
     function resolveStomp() {
       const p = state.player;
       if (!p) return;
@@ -810,6 +868,7 @@
       });
     }
 
+    // プレイヤーと通常状態の敵が接触したか確認する。
     function checkPlayerHit() {
       const p = state.player;
       if (!p) return;
@@ -824,6 +883,7 @@
       }
     }
 
+    // プレイ中のゲーム状態を1フレーム分更新する。
     function update(dt) {
       if (state.mode !== "PLAY") return;
 
@@ -841,6 +901,7 @@
       }
     }
 
+    // マップの床、梯子、穴をオフスクリーンバッファへ描画する。
     function drawMap() {
       for (let row = 0; row < ROWS; row++) {
         for (let col = 0; col < COLS; col++) {
@@ -858,6 +919,7 @@
       });
     }
 
+    // プレイヤーと敵キャラクターを描画する。
     function drawEntities() {
       const p = state.player;
       if (p) {
@@ -876,6 +938,7 @@
       });
     }
 
+    // タイトル画面など、ゲーム画面の上に重ねる表示を描画する。
     function drawOverlay() {
       if (state.mode === "TITLE") {
         ctx.fillStyle = "rgba(0,0,0,0.65)";
@@ -888,10 +951,12 @@
       }
     }
 
+    // スコア、残機、ステージ番号のHUD表示を更新する。
     function drawHUD() {
       hud.textContent = `SCORE ${state.score.toString().padStart(5, "0")}   LIVES ${state.lives}   STAGE ${state.stage}`;
     }
 
+    // ゲーム画面全体を描画し、表示用キャンバスへ拡大転送する。
     function render() {
       ctx.clearRect(0, 0, buffer.width, buffer.height);
       drawMap();
@@ -903,6 +968,7 @@
       screenCtx.drawImage(buffer, 0, 0, canvas.width, canvas.height);
     }
 
+    // requestAnimationFrameで呼ばれるメインループ処理。
     function loop(ts) {
       if (!state.lastTime) state.lastTime = ts;
       const dt = Math.min(0.033, (ts - state.lastTime) / 1000);
@@ -912,6 +978,7 @@
       requestAnimationFrame(loop);
     }
 
+    // スプライトの色番号を実際の描画色に変換する。
     function getColor(colorCode) {
       switch (colorCode) {
         case 0: return "black";
