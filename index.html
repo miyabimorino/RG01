@@ -127,6 +127,8 @@
       enemyTrapTime: 3.5,
     };
 
+    const COLORS = ["black", "blue", "red", "purple", "lime", "aqua", "yellow", "white"];
+
     const SPRITES = {
       wall: [
         { x: 0, y: 0, colorCode: 4 }, { x: 1, y: 0, colorCode: 4 }, { x: 2, y: 0, colorCode: 4 }, { x: 4, y: 0, colorCode: 4 }, { x: 5, y: 0, colorCode: 4 }, { x: 6, y: 0, colorCode: 4 },
@@ -182,53 +184,90 @@
       ],
       playerClimb: [
         [
-          { x: 3, y: 1, colorCode: 2 }, { x: 4, y: 1, colorCode: 2 }, { x: 5, y: 1, colorCode: 2 },
-          { x: 2, y: 2, colorCode: 2 }, { x: 3, y: 2, colorCode: 2 }, { x: 4, y: 2, colorCode: 2 }, { x: 5, y: 2, colorCode: 2 },
-          { x: 3, y: 3, colorCode: 6 }, { x: 4, y: 3, colorCode: 6 }, { x: 5, y: 3, colorCode: 6 },
-          { x: 4, y: 4, colorCode: 6 },
-          { x: 2, y: 5, colorCode: 6 }, { x: 3, y: 5, colorCode: 2 }, { x: 4, y: 5, colorCode: 1 }, { x: 5, y: 5, colorCode: 2 }, { x: 6, y: 5, colorCode: 6 },
-          { x: 3, y: 6, colorCode: 1 }, { x: 4, y: 6, colorCode: 1 }, { x: 5, y: 6, colorCode: 1 },
-          { x: 3, y: 7, colorCode: 1 }, { x: 4, y: 7, colorCode: 1 }, { x: 5, y: 7, colorCode: 1 },
-          { x: 2, y: 8, colorCode: 6 }, { x: 3, y: 8, colorCode: 2 }, { x: 4, y: 8, colorCode: 1 }, { x: 5, y: 8, colorCode: 2 }, { x: 6, y: 8, colorCode: 6 },
-          { x: 3, y: 9, colorCode: 1 }, { x: 4, y: 9, colorCode: 1 }, { x: 5, y: 9, colorCode: 1 },
-          { x: 3, y: 10, colorCode: 2 }, { x: 5, y: 10, colorCode: 2 },
-          { x: 2, y: 11, colorCode: 2 }, { x: 5, y: 11, colorCode: 2 },
+          { x: 2, y: 0, colorCode: 2 }, { x: 3, y: 0, colorCode: 2 }, { x: 4, y: 0, colorCode: 2 }, { x: 5, y: 0, colorCode: 2 },
+          { x: 2, y: 1, colorCode: 2 }, { x: 3, y: 1, colorCode: 2 }, { x: 4, y: 1, colorCode: 2 }, { x: 5, y: 1, colorCode: 2 }, { x: 6, y: 1, colorCode: 2 },
+          { x: 2, y: 2, colorCode: 6 }, { x: 3, y: 2, colorCode: 6 }, { x: 4, y: 2, colorCode: 6 }, { x: 5, y: 2, colorCode: 6 },
+          { x: 3, y: 3, colorCode: 6 }, { x: 4, y: 3, colorCode: 6 },
+          { x: 2, y: 4, colorCode: 1 }, { x: 3, y: 4, colorCode: 1 }, { x: 4, y: 4, colorCode: 1 }, { x: 5, y: 4, colorCode: 2 }, { x: 6, y: 4, colorCode: 2 }, { x: 7, y: 4, colorCode: 6 },
+          { x: 0, y: 5, colorCode: 6 }, { x: 1, y: 5, colorCode: 2 }, { x: 2, y: 5, colorCode: 2 }, { x: 3, y: 5, colorCode: 1 }, { x: 4, y: 5, colorCode: 1 }, { x: 5, y: 5, colorCode: 1 },
+          { x: 2, y: 6, colorCode: 1 }, { x: 3, y: 6, colorCode: 1 }, { x: 4, y: 6, colorCode: 1 }, { x: 5, y: 6, colorCode: 1 },
+          { x: 2, y: 7, colorCode: 1 }, { x: 3, y: 7, colorCode: 1 }, { x: 4, y: 7, colorCode: 1 }, { x: 5, y: 7, colorCode: 1 },
+          { x: 2, y: 8, colorCode: 1 }, { x: 3, y: 8, colorCode: 1 }, { x: 4, y: 8, colorCode: 1 }, { x: 5, y: 8, colorCode: 1 }, { x: 6, y: 8, colorCode: 1 },
+          { x: 2, y: 9, colorCode: 1 }, { x: 3, y: 9, colorCode: 1 }, { x: 4, y: 9, colorCode: 1 }, { x: 5, y: 9, colorCode: 1 }, { x: 6, y: 9, colorCode: 1 },
+          { x: 3, y: 10, colorCode: 1 }, { x: 6, y: 10, colorCode: 2 }, { x: 7, y: 10, colorCode: 2 },
+          { x: 1, y: 11, colorCode: 2 }, { x: 2, y: 11, colorCode: 2 }, { x: 3, y: 11, colorCode: 2 },
         ],
         [
-          { x: 3, y: 1, colorCode: 2 }, { x: 4, y: 1, colorCode: 2 }, { x: 5, y: 1, colorCode: 2 },
-          { x: 2, y: 2, colorCode: 2 }, { x: 3, y: 2, colorCode: 2 }, { x: 4, y: 2, colorCode: 2 }, { x: 5, y: 2, colorCode: 2 },
-          { x: 3, y: 3, colorCode: 6 }, { x: 4, y: 3, colorCode: 6 }, { x: 5, y: 3, colorCode: 6 },
-          { x: 4, y: 4, colorCode: 6 },
-          { x: 2, y: 5, colorCode: 6 }, { x: 3, y: 5, colorCode: 2 }, { x: 4, y: 5, colorCode: 1 }, { x: 5, y: 5, colorCode: 2 }, { x: 6, y: 5, colorCode: 6 },
-          { x: 3, y: 6, colorCode: 1 }, { x: 4, y: 6, colorCode: 1 }, { x: 5, y: 6, colorCode: 1 },
-          { x: 3, y: 7, colorCode: 1 }, { x: 4, y: 7, colorCode: 1 }, { x: 5, y: 7, colorCode: 1 },
-          { x: 2, y: 8, colorCode: 6 }, { x: 3, y: 8, colorCode: 2 }, { x: 4, y: 8, colorCode: 1 }, { x: 5, y: 8, colorCode: 2 }, { x: 6, y: 8, colorCode: 6 },
-          { x: 3, y: 9, colorCode: 1 }, { x: 4, y: 9, colorCode: 1 }, { x: 5, y: 9, colorCode: 1 },
-          { x: 2, y: 10, colorCode: 2 }, { x: 4, y: 10, colorCode: 2 },
-          { x: 2, y: 11, colorCode: 2 }, { x: 4, y: 11, colorCode: 2 },
+          { x: 2, y: 0, colorCode: 2 }, { x: 3, y: 0, colorCode: 2 }, { x: 4, y: 0, colorCode: 2 }, { x: 5, y: 0, colorCode: 2 },
+          { x: 2, y: 1, colorCode: 2 }, { x: 3, y: 1, colorCode: 2 }, { x: 4, y: 1, colorCode: 2 }, { x: 5, y: 1, colorCode: 2 }, { x: 6, y: 1, colorCode: 2 },
+          { x: 2, y: 2, colorCode: 6 }, { x: 3, y: 2, colorCode: 6 }, { x: 4, y: 2, colorCode: 6 }, { x: 5, y: 2, colorCode: 6 },
+          { x: 3, y: 3, colorCode: 6 }, { x: 4, y: 3, colorCode: 6 },
+          { x: 0, y: 4, colorCode: 6 }, { x: 1, y: 4, colorCode: 2 }, { x: 2, y: 4, colorCode: 2 }, { x: 3, y: 4, colorCode: 1 }, { x: 4, y: 4, colorCode: 1 }, { x: 5, y: 4, colorCode: 2 }, { x: 6, y: 4, colorCode: 2 }, { x: 7, y: 4, colorCode: 6 },
+          { x: 2, y: 5, colorCode: 1 }, { x: 3, y: 5, colorCode: 1 }, { x: 4, y: 5, colorCode: 1 }, { x: 5, y: 5, colorCode: 1 },
+          { x: 2, y: 6, colorCode: 1 }, { x: 3, y: 6, colorCode: 1 }, { x: 4, y: 6, colorCode: 1 }, { x: 5, y: 6, colorCode: 1 },
+          { x: 2, y: 7, colorCode: 1 }, { x: 3, y: 7, colorCode: 1 }, { x: 4, y: 7, colorCode: 1 }, { x: 5, y: 7, colorCode: 1 },
+          { x: 2, y: 8, colorCode: 1 }, { x: 3, y: 8, colorCode: 1 }, { x: 4, y: 8, colorCode: 1 }, { x: 5, y: 8, colorCode: 1 },
+          { x: 1, y: 9, colorCode: 1 }, { x: 2, y: 9, colorCode: 1 }, { x: 3, y: 9, colorCode: 1 }, { x: 4, y: 9, colorCode: 1 }, { x: 5, y: 9, colorCode: 1 }, { x: 6, y: 9, colorCode: 1 },
+          { x: 0, y: 10, colorCode: 1 }, { x: 1, y: 10, colorCode: 1 }, { x: 2, y: 10, colorCode: 1 }, { x: 5, y: 10, colorCode: 1 }, { x: 6, y: 10, colorCode: 1 },
+          { x: 0, y: 11, colorCode: 2 }, { x: 1, y: 11, colorCode: 2 }, { x: 6, y: 11, colorCode: 2 }, { x: 7, y: 11, colorCode: 2 },
         ],
         [
-          { x: 3, y: 1, colorCode: 2 }, { x: 4, y: 1, colorCode: 2 }, { x: 5, y: 1, colorCode: 2 },
-          { x: 2, y: 2, colorCode: 2 }, { x: 3, y: 2, colorCode: 2 }, { x: 4, y: 2, colorCode: 2 }, { x: 5, y: 2, colorCode: 2 },
-          { x: 3, y: 3, colorCode: 6 }, { x: 4, y: 3, colorCode: 6 }, { x: 5, y: 3, colorCode: 6 },
-          { x: 4, y: 4, colorCode: 6 },
-          { x: 2, y: 5, colorCode: 6 }, { x: 3, y: 5, colorCode: 2 }, { x: 4, y: 5, colorCode: 1 }, { x: 5, y: 5, colorCode: 2 }, { x: 6, y: 5, colorCode: 6 },
-          { x: 3, y: 6, colorCode: 1 }, { x: 4, y: 6, colorCode: 1 }, { x: 5, y: 6, colorCode: 1 },
-          { x: 2, y: 7, colorCode: 6 }, { x: 3, y: 7, colorCode: 2 }, { x: 4, y: 7, colorCode: 1 }, { x: 5, y: 7, colorCode: 2 }, { x: 6, y: 7, colorCode: 6 },
-          { x: 3, y: 8, colorCode: 1 }, { x: 4, y: 8, colorCode: 1 }, { x: 5, y: 8, colorCode: 1 },
-          { x: 3, y: 9, colorCode: 1 }, { x: 4, y: 9, colorCode: 1 }, { x: 5, y: 9, colorCode: 1 },
-          { x: 3, y: 10, colorCode: 2 }, { x: 5, y: 10, colorCode: 2 },
-          { x: 3, y: 11, colorCode: 2 }, { x: 5, y: 11, colorCode: 2 },
+          { x: 2, y: 0, colorCode: 2 }, { x: 3, y: 0, colorCode: 2 }, { x: 4, y: 0, colorCode: 2 }, { x: 5, y: 0, colorCode: 2 },
+          { x: 2, y: 1, colorCode: 2 }, { x: 3, y: 1, colorCode: 2 }, { x: 4, y: 1, colorCode: 2 }, { x: 5, y: 1, colorCode: 2 }, { x: 6, y: 1, colorCode: 2 },
+          { x: 2, y: 2, colorCode: 6 }, { x: 3, y: 2, colorCode: 6 }, { x: 4, y: 2, colorCode: 6 }, { x: 5, y: 2, colorCode: 6 },
+          { x: 3, y: 3, colorCode: 6 }, { x: 4, y: 3, colorCode: 6 },
+          { x: 0, y: 4, colorCode: 6 }, { x: 1, y: 4, colorCode: 2 }, { x: 2, y: 4, colorCode: 2 }, { x: 3, y: 4, colorCode: 1 }, { x: 4, y: 4, colorCode: 1 }, { x: 5, y: 4, colorCode: 1 },
+          { x: 2, y: 5, colorCode: 1 }, { x: 3, y: 5, colorCode: 1 }, { x: 4, y: 5, colorCode: 1 }, { x: 5, y: 5, colorCode: 2 }, { x: 6, y: 5, colorCode: 2 }, { x: 7, y: 5, colorCode: 6 },
+          { x: 2, y: 6, colorCode: 1 }, { x: 3, y: 6, colorCode: 1 }, { x: 4, y: 6, colorCode: 1 }, { x: 5, y: 6, colorCode: 1 },
+          { x: 2, y: 7, colorCode: 1 }, { x: 3, y: 7, colorCode: 1 }, { x: 4, y: 7, colorCode: 1 }, { x: 5, y: 7, colorCode: 1 },
+          { x: 1, y: 8, colorCode: 1 }, { x: 2, y: 8, colorCode: 1 }, { x: 3, y: 8, colorCode: 1 }, { x: 4, y: 8, colorCode: 1 }, { x: 5, y: 8, colorCode: 1 },
+          { x: 1, y: 9, colorCode: 1 }, { x: 2, y: 9, colorCode: 1 }, { x: 3, y: 9, colorCode: 1 }, { x: 4, y: 9, colorCode: 1 }, { x: 5, y: 9, colorCode: 1 },
+          { x: 0, y: 10, colorCode: 2 }, { x: 1, y: 10, colorCode: 2 }, { x: 4, y: 10, colorCode: 1 },
+          { x: 4, y: 11, colorCode: 2 }, { x: 5, y: 11, colorCode: 2 }, { x: 6, y: 11, colorCode: 2 },
+        ],
+      ],
+      monster: [
+        [
+          { x: 1, y: 0, colorCode: 4 }, { x: 2, y: 0, colorCode: 4 }, { x: 5, y: 0, colorCode: 4 }, { x: 6, y: 0, colorCode: 4 },
+          { x: 3, y: 1, colorCode: 4 }, { x: 4, y: 1, colorCode: 4 },
+          { x: 2, y: 2, colorCode: 4 }, { x: 3, y: 2, colorCode: 4 }, { x: 4, y: 2, colorCode: 4 }, { x: 5, y: 2, colorCode: 4 },
+          { x: 1, y: 3, colorCode: 7 }, { x: 2, y: 3, colorCode: 7 }, { x: 3, y: 3, colorCode: 4 }, { x: 4, y: 3, colorCode: 4 }, { x: 5, y: 3, colorCode: 7 }, { x: 6, y: 3, colorCode: 7 },
+          { x: 0, y: 4, colorCode: 4 }, { x: 1, y: 4, colorCode: 4 }, { x: 2, y: 4, colorCode: 7 }, { x: 3, y: 4, colorCode: 4 }, { x: 4, y: 4, colorCode: 4 }, { x: 5, y: 4, colorCode: 7 }, { x: 6, y: 4, colorCode: 4 }, { x: 7, y: 4, colorCode: 4 },
+          { x: 0, y: 5, colorCode: 4 }, { x: 2, y: 5, colorCode: 7 }, { x: 3, y: 5, colorCode: 4 }, { x: 4, y: 5, colorCode: 4 }, { x: 5, y: 5, colorCode: 7 }, { x: 7, y: 5, colorCode: 4 },
+          { x: 2, y: 6, colorCode: 4 }, { x: 3, y: 6, colorCode: 4 }, { x: 4, y: 6, colorCode: 4 }, { x: 5, y: 6, colorCode: 4 },
+          { x: 2, y: 7, colorCode: 4 }, { x: 5, y: 7, colorCode: 4 },
+        ],
+        [
+          { x: 0, y: 0, colorCode: 4 }, { x: 1, y: 0, colorCode: 4 }, { x: 6, y: 0, colorCode: 4 }, { x: 7, y: 0, colorCode: 4 },
+          { x: 2, y: 1, colorCode: 4 }, { x: 5, y: 1, colorCode: 4 },
+          { x: 2, y: 2, colorCode: 4 }, { x: 3, y: 2, colorCode: 4 }, { x: 4, y: 2, colorCode: 4 }, { x: 5, y: 2, colorCode: 4 },
+          { x: 0, y: 3, colorCode: 4 }, { x: 1, y: 3, colorCode: 7 }, { x: 2, y: 3, colorCode: 7 }, { x: 3, y: 3, colorCode: 4 }, { x: 4, y: 3, colorCode: 4 }, { x: 5, y: 3, colorCode: 7 }, { x: 6, y: 3, colorCode: 7 }, { x: 7, y: 3, colorCode: 4 },
+          { x: 1, y: 4, colorCode: 4 }, { x: 2, y: 4, colorCode: 7 }, { x: 3, y: 4, colorCode: 4 }, { x: 4, y: 4, colorCode: 4 }, { x: 5, y: 4, colorCode: 7 }, { x: 6, y: 4, colorCode: 4 },
+          { x: 2, y: 5, colorCode: 7 }, { x: 3, y: 5, colorCode: 4 }, { x: 4, y: 5, colorCode: 4 }, { x: 5, y: 5, colorCode: 7 },
+          { x: 1, y: 6, colorCode: 4 }, { x: 2, y: 6, colorCode: 4 }, { x: 3, y: 6, colorCode: 4 }, { x: 4, y: 6, colorCode: 4 }, { x: 5, y: 6, colorCode: 4 }, { x: 6, y: 6, colorCode: 4 },
+          { x: 1, y: 7, colorCode: 4 }, { x: 6, y: 7, colorCode: 4 },
         ],
       ],
     };
 
+    // 同じスプライトの横幅を毎回走査しないように保持する。
+    const spriteWidths = new WeakMap();
+
+    function getSpriteWidth(sprite) {
+      let width = spriteWidths.get(sprite);
+      if (width === undefined) {
+        width = sprite.reduce((max, cell) => Math.max(max, cell.x), 0) + 1;
+        spriteWidths.set(sprite, width);
+      }
+      return width;
+    }
+
     // ピクセル定義されたスプライトを指定位置に描画する。
     function drawSprite(sprite, x, y, flipX = false) {
-      const spriteWidth = sprite.reduce((max, cell) => Math.max(max, cell.x), 0) + 1;
+      const spriteWidth = getSpriteWidth(sprite);
       for (const cell of sprite) {
         const dx = flipX ? spriteWidth - 1 - cell.x : cell.x;
-        ctx.fillStyle = getColor(cell.colorCode);
+        ctx.fillStyle = COLORS[cell.colorCode];
         ctx.fillRect(x + dx, y + cell.y, 1, 1);
       }
     }
@@ -241,6 +280,7 @@
 
     const KEYS = new Set();
     const CONTROL_KEYS = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "];
+    let lastHudText = "";
 
     window.addEventListener("keydown", (e) => {
       KEYS.add(e.key);
@@ -292,11 +332,6 @@
       return col >= 0 && col < COLS && row >= 0 && row < ROWS;
     }
 
-    // 指定したピクセル座標が描画領域内か判定する。
-    function inScreenBounds(x, y) {
-      return x >= 0 && x < LOGICAL_WIDTH && y >= 0 && y < LOGICAL_HEIGHT;
-    }
-
     // プレイヤー用の移動可能方向フラグを初期化する。
     function createMoveFlags() {
       return {
@@ -337,6 +372,10 @@
         vy: 0,
         state: "walk",
         trappedTimer: 0,
+        anim: 0,
+        onLadder: false,
+        supportLockRow: null,
+        moveFlags: createMoveFlags(),
       };
     }
 
@@ -396,14 +435,6 @@
       return state.map[row][col];
     }
 
-    // ピクセル座標をマップの列・行座標に変換する。
-    function pixelToMap(x, y) {
-      return {
-        col: Math.floor(x / CHIP_W),
-        row: Math.floor(y / CHIP_H),
-      };
-    }
-
     // 指定したマップ座標に掘られた穴があるか探す。
     function holeAt(col, row) {
       return state.holes.find((h) => h.col === col && h.row === row);
@@ -426,13 +457,6 @@
       if (hole.phase === "open") return true;
       if (hole.phase === "closing" && hole.timer >= 0.2) return true;
       return false;
-    }
-
-    // 指定したピクセル位置に有効な床があるか判定する。
-    function floorAtPixel(x, y) {
-      if (!inScreenBounds(x, y)) return false;
-      const { col, row } = pixelToMap(x, y);
-      return canStandOnCell(col, row);
     }
 
     // 座標が指定グリッド幅にほぼ揃っているか判定する。
@@ -463,6 +487,13 @@
     // エンティティの足元が乗る支え行を求める。
     function entitySupportRow(entity) {
       return Math.floor((entity.y + entity.h) / CHIP_H);
+    }
+
+    // エンティティの足元がまたぐマップ列を求める。
+    function entityFootColumns(entity) {
+      const leftCol = Math.floor((entity.x + 1) / CHIP_W);
+      const rightCol = Math.floor((entity.x + entity.w - 2) / CHIP_W);
+      return leftCol === rightCol ? [leftCol] : [leftCol, rightCol];
     }
 
     // エンティティが現在の列で梯子に触れているか判定する。
@@ -501,38 +532,39 @@
       return ladderAligned(entity) && verticalAligned(entity);
     }
 
-    // エンティティの足元近くにある床のY座標を探す。
-    function findSupportY(entity, maxDistance = 3) {
-      const leftX = Math.floor(entity.x + 1);
-      const rightX = Math.floor(entity.x + entity.w - 2);
-      const footBase = Math.floor(entity.y + entity.h);
-      for (let dy = 0; dy <= maxDistance; dy++) {
-        const sampleY = footBase + dy;
-        if (floorAtPixel(leftX, sampleY) || floorAtPixel(rightX, sampleY)) {
-          return sampleY;
-        }
+    // 指定したマップ行にエンティティの足元を支える床セルがあるか判定する。
+    function supportRowHasFloor(entity, row) {
+      return entityFootColumns(entity).some((col) => canStandOnCell(col, row));
+    }
+
+    // エンティティの足元近くにある支え行をマップから探す。
+    function findSupportRow(entity, maxDistance = 3) {
+      const startRow = entitySupportRow(entity);
+      const footY = entity.y + entity.h;
+      for (let offset = 0; ; offset++) {
+        const row = startRow + offset;
+        const distance = row * CHIP_H - footY;
+        if (distance > maxDistance) break;
+        if (supportRowHasFloor(entity, row)) return row;
       }
       return null;
     }
 
     // エンティティの足元が床に支えられているか判定する。
     function feetOnFloor(entity) {
-      return findSupportY(entity) !== null;
+      return findSupportRow(entity) !== null;
     }
 
-    // エンティティの足元ピクセルが床チップ上にあるか判定する。
+    // エンティティの現在の支え行に床セルがあるか判定する。
     function footOnFloorMap(entity) {
-      const leftX = Math.floor(entity.x + 1);
-      const rightX = Math.floor(entity.x + entity.w - 2);
-      const footY = Math.floor(entity.y + entity.h);
-      return floorAtPixel(leftX, footY) || floorAtPixel(rightX, footY);
+      return supportRowHasFloor(entity, entitySupportRow(entity));
     }
 
     // エンティティを直下の床にぴったり乗る位置へ補正する。
     function snapToFloor(entity) {
-      const supportY = findSupportY(entity);
-      if (supportY === null) return;
-      entity.y = supportY - entity.h;
+      const supportRow = findSupportRow(entity);
+      if (supportRow === null) return;
+      entity.y = supportRow * CHIP_H - entity.h;
       entity.vy = 0;
     }
 
@@ -560,22 +592,22 @@
       return canStandOnCell(col, row) || hasLadderAtCell(col, row);
     }
 
-    // 現在位置からプレイヤーが進める方向フラグを更新する。
-    function refreshPlayerMoveFlags(player) {
-      if (!atDecisionPoint(player)) return;
+    // 現在位置からエンティティが進める方向フラグを更新する。
+    function refreshMoveFlags(entity) {
+      if (!atDecisionPoint(entity)) return;
 
-      const col = entityColumn(player);
-      const supportRow = entitySupportRow(player);
-      const ladderAbove = ladderAboveEntity(player);
-      const ladderBelow = ladderBelowEntity(player);
+      const col = entityColumn(entity);
+      const supportRow = entitySupportRow(entity);
+      const ladderAbove = ladderAboveEntity(entity);
+      const ladderBelow = ladderBelowEntity(entity);
       const standing = canStandOnCell(col, supportRow);
-      const supportLocked = player.supportLockRow === supportRow;
-      const canStepSideways = standing || supportLocked || player.onLadder;
+      const supportLocked = entity.supportLockRow === supportRow;
+      const canStepSideways = standing || supportLocked || entity.onLadder;
 
-      player.moveFlags.left = col > 0 && canStepSideways && canMoveHorizontallyIntoCell(col - 1, supportRow);
-      player.moveFlags.right = col < COLS - 1 && canStepSideways && canMoveHorizontallyIntoCell(col + 1, supportRow);
-      player.moveFlags.up = ladderAbove;
-      player.moveFlags.down = ladderBelow;
+      entity.moveFlags.left = col > 0 && canStepSideways && canMoveHorizontallyIntoCell(col - 1, supportRow);
+      entity.moveFlags.right = col < COLS - 1 && canStepSideways && canMoveHorizontallyIntoCell(col + 1, supportRow);
+      entity.moveFlags.up = ladderAbove;
+      entity.moveFlags.down = ladderBelow;
     }
 
     // 移動中に次のグリッド境界を越えないよう座標を進める。
@@ -613,7 +645,8 @@
 
     // 穴の開閉タイマーを進め、閉じ終わった穴を削除する。
     function updateHoles(dt) {
-      state.holes.forEach((h) => {
+      for (let i = state.holes.length - 1; i >= 0; i--) {
+        const h = state.holes[i];
         if (h.phase === "open") {
           h.timer -= dt;
           if (h.timer <= 0) {
@@ -623,8 +656,8 @@
         } else if (h.phase === "closing") {
           h.timer -= dt;
         }
-      });
-      state.holes = state.holes.filter((h) => h.phase !== "closing" || h.timer > 0);
+        if (h.phase === "closing" && h.timer <= 0) state.holes.splice(i, 1);
+      }
     }
 
     // エンティティが画面外に出ないよう座標を制限する。
@@ -658,6 +691,14 @@
       return true;
     }
 
+    // 敵が床に乗れる状態なら、床位置と支え行を更新する。
+    function settleEnemyOnFloor(enemy) {
+      if (enemy.onLadder || enemy.vy < 0 || !feetOnFloor(enemy)) return false;
+      snapToFloor(enemy);
+      enemy.supportLockRow = entitySupportRow(enemy);
+      return true;
+    }
+
     // 梯子移動や通常移動に応じてプレイヤーのアニメーション値を更新する。
     function updatePlayerAnimation(player, dt) {
       if (player.onLadder && Math.abs(player.vy) > 1) {
@@ -670,6 +711,15 @@
         player.anim += dt * 8;
       } else {
         player.anim = 0;
+      }
+    }
+
+    // 敵が移動している間だけモンスタースプライトの歩行フレームを進める。
+    function updateEnemyAnimation(enemy, dt) {
+      if (enemy.state === "walk" && (Math.abs(enemy.vx) > 1 || Math.abs(enemy.vy) > 1)) {
+        enemy.anim += dt * 8;
+      } else {
+        enemy.anim = 0;
       }
     }
 
@@ -693,7 +743,7 @@
       if (atDecisionPoint(p)) {
         p.x = snapToGrid(p.x, CHIP_W);
         p.y = snapToGrid(p.y, CHIP_H);
-        refreshPlayerMoveFlags(p);
+        refreshMoveFlags(p);
 
         p.vx = 0;
         p.vy = 0;
@@ -781,37 +831,47 @@
             p.supportLockRow = null;
           }
         }
-        refreshPlayerMoveFlags(p);
+        refreshMoveFlags(p);
       }
 
       updatePlayerAnimation(p, dt);
       keepInBounds(p);
     }
 
-    // プレイヤー位置をもとに敵の移動方向と速度を決める。
-    function enemyAI(enemy, dt) {
-      if (!state.player) {
+    // 論理マップで進める方向だけを候補にして、敵の移動方向をランダムに選ぶ。
+    function chooseRandomEnemyMove(enemy) {
+      const choices = [];
+      if (enemy.moveFlags.left) choices.push("left");
+      if (enemy.moveFlags.right) choices.push("right");
+      if (enemy.moveFlags.up) choices.push("up");
+      if (enemy.moveFlags.down) choices.push("down");
+
+      if (choices.length === 0) {
         enemy.vx = 0;
         enemy.vy = 0;
         return;
       }
-      if (enemy.state === "trapped") return;
 
-      const p = state.player;
-      const ex = enemy.x + enemy.w / 2;
-      const ey = enemy.y + enemy.h / 2;
-      const px = p.x + p.w / 2;
-      const py = p.y + p.h / 2;
+      const choice = choices[Math.floor(Math.random() * choices.length)];
+      enemy.vx = 0;
+      enemy.vy = 0;
 
-      const sameRow = Math.floor(ey / TILE) === Math.floor(py / TILE);
-      const ladderHere = entityTouchesLadder(enemy);
-
-      if (ladderHere && !sameRow) {
-        enemy.vy = py > ey ? CONFIG.climbSpeed * 0.85 : -CONFIG.climbSpeed * 0.85;
-        enemy.vx = 0;
-      } else {
-        enemy.vx = px > ex ? CONFIG.enemySpeed : -CONFIG.enemySpeed;
-        enemy.vy += CONFIG.gravity * dt;
+      if (choice === "left") {
+        enemy.onLadder = false;
+        lockToSupportRow(enemy, entitySupportRow(enemy));
+        enemy.vx = -CONFIG.enemySpeed;
+      } else if (choice === "right") {
+        enemy.onLadder = false;
+        lockToSupportRow(enemy, entitySupportRow(enemy));
+        enemy.vx = CONFIG.enemySpeed;
+      } else if (choice === "up") {
+        enemy.onLadder = true;
+        enemy.supportLockRow = null;
+        enemy.vy = -CONFIG.climbSpeed * 0.85;
+      } else if (choice === "down") {
+        enemy.onLadder = true;
+        enemy.supportLockRow = null;
+        enemy.vy = CONFIG.climbSpeed * 0.85;
       }
     }
 
@@ -827,24 +887,73 @@
         return;
       }
 
-      enemyAI(enemy, dt);
-      enemy.x += enemy.vx * dt;
-      enemy.y += enemy.vy * dt;
+      settleEnemyOnFloor(enemy);
+
+      if (atDecisionPoint(enemy)) {
+        enemy.x = snapToGrid(enemy.x, CHIP_W);
+        enemy.y = snapToGrid(enemy.y, CHIP_H);
+        refreshMoveFlags(enemy);
+        chooseRandomEnemyMove(enemy);
+      }
+
+      if (enemy.onLadder) {
+        enemy.x = snapToGrid(enemy.x, CHIP_W);
+        enemy.supportLockRow = null;
+      } else if (enemy.supportLockRow !== null) {
+        enemy.y = enemy.supportLockRow * CHIP_H - enemy.h;
+        enemy.vy = 0;
+      } else if (feetOnFloor(enemy)) {
+        snapToFloor(enemy);
+        enemy.supportLockRow = entitySupportRow(enemy);
+        enemy.vy = 0;
+      } else {
+        enemy.vx = 0;
+        enemy.vy += CONFIG.gravity * dt;
+      }
+
+      enemy.x = moveToNextBoundary(enemy.x, enemy.vx * dt, CHIP_W);
+      enemy.y = moveToNextBoundary(enemy.y, enemy.vy * dt, CHIP_H);
 
       if (enemy.vy >= 0 && feetOnFloor(enemy)) {
         snapToFloor(enemy);
+        enemy.supportLockRow = entitySupportRow(enemy);
       }
 
-      const footRow = Math.floor((enemy.y + enemy.h) / CHIP_H);
-      const footCol = Math.floor((enemy.x + enemy.w / 2) / CHIP_W);
+      if (atDecisionPoint(enemy)) {
+        enemy.x = snapToGrid(enemy.x, CHIP_W);
+        enemy.y = snapToGrid(enemy.y, CHIP_H);
+        const ladderStillUsable = entityTouchesLadder(enemy) || ladderAboveEntity(enemy) || ladderBelowEntity(enemy);
+        if (enemy.onLadder && !ladderStillUsable) {
+          enemy.onLadder = false;
+          enemy.vy = 0;
+        }
+        if (!enemy.onLadder) {
+          if (footOnFloorMap(enemy)) {
+            enemy.supportLockRow = entitySupportRow(enemy);
+          } else if (enemy.supportLockRow !== null && canStayOnSupportRow(enemy, enemy.supportLockRow)) {
+            enemy.y = enemy.supportLockRow * CHIP_H - enemy.h;
+            enemy.vy = 0;
+          } else {
+            enemy.supportLockRow = null;
+          }
+        }
+        refreshMoveFlags(enemy);
+      }
+
+      const footRow = entitySupportRow(enemy);
+      const footCol = entityColumn(enemy);
       const hole = holeAt(footCol, footRow);
       if (hole && hole.phase === "open" && enemy.vy >= 0) {
         enemy.state = "trapped";
         enemy.trappedTimer = CONFIG.enemyTrapTime;
+        enemy.onLadder = false;
+        enemy.supportLockRow = null;
         enemy.y = footRow * CHIP_H - enemy.h + 1;
+        enemy.vx = 0;
         enemy.vy = 0;
       }
 
+      updateEnemyAnimation(enemy, dt);
       keepInBounds(enemy);
     }
 
@@ -854,12 +963,12 @@
       if (!p) return;
       if (!KEYS.has("ArrowDown")) return;
 
-      const pCol = Math.floor((p.x + p.w / 2) / CHIP_W);
-      const pRow = Math.floor((p.y + p.h) / CHIP_H) - 1;
+      const pCol = entityColumn(p);
+      const pRow = entitySupportRow(p) - 1;
       state.enemies = state.enemies.filter((e) => {
         if (e.state !== "trapped") return true;
-        const eCol = Math.floor((e.x + e.w / 2) / CHIP_W);
-        const eRow = Math.floor((e.y + e.h) / CHIP_H);
+        const eCol = entityColumn(e);
+        const eRow = entitySupportRow(e);
         if (eCol === pCol && eRow === pRow + 1) {
           state.score += 200;
           return false;
@@ -905,7 +1014,7 @@
     function drawMap() {
       for (let row = 0; row < ROWS; row++) {
         for (let col = 0; col < COLS; col++) {
-          const chip = mapValueAt(col, row);
+          const chip = state.map[row][col];
           const x = col * CHIP_W;
           const y = row * CHIP_H;
           if (chip === MAP_FLOOR) drawSprite(SPRITES.wall, x, y);
@@ -933,8 +1042,8 @@
       }
 
       state.enemies.forEach((e) => {
-        ctx.fillStyle = e.state === "trapped" ? "#d94bff" : "#ff375f";
-        ctx.fillRect(e.x + 1, e.y + 1, e.w - 2, e.h - 2);
+        const frame = e.state === "trapped" ? 0 : Math.floor(e.anim) % SPRITES.monster.length;
+        drawSprite(SPRITES.monster[frame], Math.round(e.x), Math.round(e.y));
       });
     }
 
@@ -953,7 +1062,11 @@
 
     // スコア、残機、ステージ番号のHUD表示を更新する。
     function drawHUD() {
-      hud.textContent = `SCORE ${state.score.toString().padStart(5, "0")}   LIVES ${state.lives}   STAGE ${state.stage}`;
+      const hudText = `SCORE ${state.score.toString().padStart(5, "0")}   LIVES ${state.lives}   STAGE ${state.stage}`;
+      if (hudText !== lastHudText) {
+        hud.textContent = hudText;
+        lastHudText = hudText;
+      }
     }
 
     // ゲーム画面全体を描画し、表示用キャンバスへ拡大転送する。
@@ -978,20 +1091,6 @@
       requestAnimationFrame(loop);
     }
 
-    // スプライトの色番号を実際の描画色に変換する。
-    function getColor(colorCode) {
-      switch (colorCode) {
-        case 0: return "black";
-        case 1: return "blue";
-        case 2: return "red";
-        case 3: return "purple";
-        case 4: return "lime";
-        case 5: return "aqua";
-        case 6: return "yellow";
-        case 7: return "white";
-        default: return "black";
-      }
-    }
     window.addEventListener("resize", resizeCanvas);
     resizeCanvas();
     resetPlayer();
