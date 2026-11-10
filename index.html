@@ -100,15 +100,18 @@
       inst.style.width = `${cssWidth}px`;
     }
 
-    const TILE = 8;
-    const CHIP_W = 8;
-    const CHIP_H = 4;
-    const COLS = 20;
-    const ROWS = 25;
+    const TILE_W = 8;
+    const TILE_H = 4;
+    const CHIP_W = 2;
+    const CHIP_H = 2;
+    // プレイヤーと敵の座標は論理マップの1セル（2ドット）単位で更新する。
+    const MOVE_UNIT = CHIP_W;
+    const COLS = LOGICAL_WIDTH / CHIP_W;
+    const ROWS = LOGICAL_HEIGHT / CHIP_H;
     const MAP_EMPTY = 0;
     const MAP_FLOOR = 1;
     const MAP_LADDER = 2;
-    const FLOOR_ROWS = [4, 9, 14, 19, 24];
+    const FLOOR_ROWS = [4, 9, 14, 19, 24].map((row) => row * TILE_H / CHIP_H);
     const LADDER_GROUPS = [
       { startRow: 3, endRow: 8, count: 3 },
       { startRow: 8, endRow: 13, count: 2 },
@@ -285,17 +288,28 @@
     window.addEventListener("keydown", (e) => {
       KEYS.add(e.key);
       if (CONTROL_KEYS.includes(e.key)) e.preventDefault();
+      if (!e.repeat && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key) && state.player) {
+        if (state.player.blockedMoveKey === e.key) state.player.blockedMoveKey = null;
+        state.player.moveCommand = e.key;
+      }
       if (e.key === "Enter" && state.mode === "TITLE") startGame();
     });
-    window.addEventListener("keyup", (e) => KEYS.delete(e.key));
+    window.addEventListener("keyup", (e) => {
+      KEYS.delete(e.key);
+      if (state.player && state.player.blockedMoveKey === e.key) {
+        state.player.blockedMoveKey = null;
+      }
+    });
 
     // 床と梯子を配置したステージマップを生成する。
     function makeStageMap() {
       const map = Array.from({ length: ROWS }, () => Array(COLS).fill(MAP_EMPTY));
 
       FLOOR_ROWS.forEach((row) => {
-        for (let col = 0; col < COLS; col++) {
-          map[row][col] = MAP_FLOOR;
+        for (let floorRow = row; floorRow < row + TILE_H / CHIP_H; floorRow++) {
+          for (let col = 0; col < COLS; col++) {
+            map[floorRow][col] = MAP_FLOOR;
+          }
         }
       });
 
@@ -305,9 +319,12 @@
           usedCols.add(randomLadderChipColumn());
         }
         usedCols.forEach((col) => {
-          const ladderTopRow = Math.max(group.startRow - 1, 0);
-          for (let row = ladderTopRow; row <= group.endRow; row++) {
-            map[row][col] = MAP_LADDER;
+          const ladderTopRow = Math.max(group.startRow - 1, 0) * TILE_H / CHIP_H;
+          const ladderEndRow = group.endRow * TILE_H / CHIP_H + TILE_H / CHIP_H - 1;
+          for (let row = ladderTopRow; row <= ladderEndRow; row++) {
+            for (let ladderCol = col; ladderCol < col + TILE_W / CHIP_W; ladderCol++) {
+              if (inMapBounds(ladderCol, row)) map[row][ladderCol] = MAP_LADDER;
+            }
           }
         });
       });
@@ -345,7 +362,7 @@
     // プレイヤーの初期データを作成する。
     function createPlayer() {
       return {
-        x: TILE,
+        x: TILE_W,
         y: 84,
         w: 8,
         h: 12,
@@ -357,6 +374,12 @@
         digging: 0,
         anim: 0,
         climbAnim: 0,
+        moveRemainderX: 0,
+        moveRemainderY: 0,
+        moveCommand: null,
+        moveDistanceRemaining: 0,
+        blockedMoveKey: null,
+        ladderEntryFloorRow: null,
         moveFlags: createMoveFlags(),
       };
     }
@@ -376,6 +399,10 @@
         onLadder: false,
         supportLockRow: null,
         moveFlags: createMoveFlags(),
+        moveRemainderX: 0,
+        moveRemainderY: 0,
+        moveDistanceRemaining: 0,
+        ladderEntryFloorRow: null,
       };
     }
 
@@ -437,12 +464,21 @@
 
     // 指定したマップ座標に掘られた穴があるか探す。
     function holeAt(col, row) {
-      return state.holes.find((h) => h.col === col && h.row === row);
+      return state.holes.find((h) =>
+        col >= h.col
+        && col < h.col + h.width
+        && row >= h.row
+        && row < h.row + h.height
+      );
     }
 
     // 指定したマップ座標が床チップかどうかを判定する。
     function hasFloorAtCell(col, row) {
-      return mapValueAt(col, row) === MAP_FLOOR;
+      const chip = mapValueAt(col, row);
+      const onFloorRow = FLOOR_ROWS.some(
+        (floorRow) => row >= floorRow && row < floorRow + TILE_H / CHIP_H
+      );
+      return chip === MAP_FLOOR || (chip === MAP_LADDER && onFloorRow);
     }
 
     // 指定したマップ座標が梯子チップかどうかを判定する。
@@ -498,6 +534,7 @@
 
     // エンティティが現在の列で梯子に触れているか判定する。
     function entityTouchesLadder(entity) {
+      if (!ladderAligned(entity)) return false;
       const col = entityColumn(entity);
       const topRow = entityTopRow(entity);
       const bottomRow = entityBottomRow(entity);
@@ -509,17 +546,19 @@
 
     // エンティティの上方向に登れる梯子があるか判定する。
     function ladderAboveEntity(entity) {
+      if (!ladderAligned(entity)) return false;
       return hasLadderAtCell(entityColumn(entity), entityTopRow(entity) - 1);
     }
 
     // エンティティの下方向に降りられる梯子があるか判定する。
     function ladderBelowEntity(entity) {
+      if (!ladderAligned(entity)) return false;
       return hasLadderAtCell(entityColumn(entity), entitySupportRow(entity));
     }
 
-    // エンティティの横位置が梯子列に揃っているか判定する。
+    // エンティティの左端が梯子の横幅に揃っているか判定する。
     function ladderAligned(entity) {
-      return isAlignedToGrid(entity.x, CHIP_W);
+      return isAlignedToGrid(entity.x, TILE_W);
     }
 
     // エンティティの縦位置がチップ境界に揃っているか判定する。
@@ -529,11 +568,12 @@
 
     // 移動方向を切り替えられるグリッド交点にいるか判定する。
     function atDecisionPoint(entity) {
-      return ladderAligned(entity) && verticalAligned(entity);
+      return isAlignedToGrid(entity.x, CHIP_W) && verticalAligned(entity);
     }
 
     // 指定したマップ行にエンティティの足元を支える床セルがあるか判定する。
     function supportRowHasFloor(entity, row) {
+      if (!FLOOR_ROWS.includes(row)) return false;
       return entityFootColumns(entity).some((col) => canStandOnCell(col, row));
     }
 
@@ -580,11 +620,6 @@
       return hasLadderAtCell(col, row);
     }
 
-    // 指定セルの左右どちらかに立てる床があるか判定する。
-    function hasSideFloor(col, row) {
-      return canStandOnCell(col - 1, row) || canStandOnCell(col + 1, row);
-    }
-
     // エンティティが指定した支え行に留まれるか判定する。
     function canStayOnSupportRow(entity, row) {
       const col = entityColumn(entity);
@@ -600,32 +635,45 @@
       const supportRow = entitySupportRow(entity);
       const ladderAbove = ladderAboveEntity(entity);
       const ladderBelow = ladderBelowEntity(entity);
+      const onLadder = entity.onLadder && entityTouchesLadder(entity);
       const standing = canStandOnCell(col, supportRow);
       const supportLocked = entity.supportLockRow === supportRow;
-      const canStepSideways = standing || supportLocked || entity.onLadder;
+      const canStepSideways = standing || supportLocked;
 
       entity.moveFlags.left = col > 0 && canStepSideways && canMoveHorizontallyIntoCell(col - 1, supportRow);
       entity.moveFlags.right = col < COLS - 1 && canStepSideways && canMoveHorizontallyIntoCell(col + 1, supportRow);
-      entity.moveFlags.up = ladderAbove;
-      entity.moveFlags.down = ladderBelow;
+      entity.moveFlags.up = ladderAbove || onLadder;
+      entity.moveFlags.down = ladderBelow || onLadder;
     }
 
-    // 移動中に次のグリッド境界を越えないよう座標を進める。
-    function moveToNextBoundary(position, delta, size) {
-      if (delta === 0) return position;
-      const nextPosition = position + delta;
-      if (delta > 0) {
-        const nextBoundary = Math.ceil((position + 0.001) / size) * size;
-        if (!isAlignedToGrid(position, size) && nextPosition > nextBoundary) {
-          return nextBoundary;
-        }
-      } else {
-        const nextBoundary = Math.floor((position - 0.001) / size) * size;
-        if (!isAlignedToGrid(position, size) && nextPosition < nextBoundary) {
-          return nextBoundary;
+    // フレームごとの移動量を蓄積し、論理マップのセル単位で座標を更新する。
+    function moveEntityInUnits(entity, axis, delta) {
+      const remainderKey = axis === "x" ? "moveRemainderX" : "moveRemainderY";
+      const totalDelta = entity[remainderKey] + delta;
+      const requestedSteps = Math.trunc(totalDelta / MOVE_UNIT);
+      const maxSteps = entity.moveDistanceRemaining > 0
+        ? Math.floor(entity.moveDistanceRemaining / MOVE_UNIT)
+        : Infinity;
+      const steps = Math.sign(requestedSteps) * Math.min(Math.abs(requestedSteps), maxSteps);
+      entity[remainderKey] = totalDelta - steps * MOVE_UNIT;
+
+      if (steps === 0) return;
+
+      const unitDelta = Math.sign(steps) * MOVE_UNIT;
+      for (let i = 0; i < Math.abs(steps); i++) {
+        entity[axis] += unitDelta;
+      }
+
+      if (entity.moveDistanceRemaining > 0) {
+        entity.moveDistanceRemaining -= Math.abs(steps) * MOVE_UNIT;
+        if (entity.moveDistanceRemaining <= 0) {
+          entity.moveDistanceRemaining = 0;
+          entity.moveRemainderX = 0;
+          entity.moveRemainderY = 0;
+          entity.vx = 0;
+          entity.vy = 0;
         }
       }
-      return nextPosition;
     }
 
     // プレイヤーの向いている方向の床に穴を掘る。
@@ -634,13 +682,20 @@
       if (!p) return;
       if (p.digging > 0) return;
       const dir = p.facing;
-      const col = entityColumn(p) + dir;
+      const col = entityColumn(p) + p.w / CHIP_W * (dir > 0 ? 1 : -1);
       const row = entitySupportRow(p);
       if (!hasFloorAtCell(col, row)) return;
       if (holeAt(col, row)) return;
 
       p.digging = CONFIG.digDuration;
-      state.holes.push({ col, row, timer: CONFIG.holeOpenTime, phase: "open" });
+      state.holes.push({
+        col,
+        row,
+        width: TILE_W / CHIP_W,
+        height: TILE_H / CHIP_H,
+        timer: CONFIG.holeOpenTime,
+        phase: "open",
+      });
     }
 
     // 穴の開閉タイマーを進め、閉じ終わった穴を削除する。
@@ -673,21 +728,142 @@
       entity.vy = 0;
     }
 
-    // 現在押されている方向キーを扱いやすい形で取得する。
-    function readInput() {
-      return {
-        left: KEYS.has("ArrowLeft"),
-        right: KEYS.has("ArrowRight"),
-        up: KEYS.has("ArrowUp"),
-        down: KEYS.has("ArrowDown"),
-      };
+    // 1 回分の方向入力を開始する。進行中の通路では、直前の移動可否フラグを使う。
+    function startPlayerMove(player, direction) {
+      if (!direction || player.digging > 0) return false;
+
+      player.vx = 0;
+      player.vy = 0;
+
+      if (direction === "ArrowUp" && player.moveFlags.up) {
+        player.onLadder = true;
+        player.supportLockRow = null;
+        player.ladderEntryFloorRow = null;
+        player.vy = -CONFIG.climbSpeed;
+      } else if (direction === "ArrowDown" && player.moveFlags.down) {
+        const supportRow = entitySupportRow(player);
+        player.ladderEntryFloorRow = player.supportLockRow === supportRow
+          && supportRowHasFloor(player, supportRow)
+          ? supportRow
+          : null;
+        player.onLadder = true;
+        player.supportLockRow = null;
+        player.vy = CONFIG.climbSpeed;
+      } else if (direction === "ArrowLeft" && player.moveFlags.left) {
+        player.onLadder = false;
+        lockToSupportRow(player, entitySupportRow(player));
+        player.vx = -CONFIG.moveSpeed;
+      } else if (direction === "ArrowRight" && player.moveFlags.right) {
+        player.onLadder = false;
+        lockToSupportRow(player, entitySupportRow(player));
+        player.vx = CONFIG.moveSpeed;
+      } else {
+        return false;
+      }
+
+      player.moveDistanceRemaining = player.vx !== 0 ? CHIP_W : CHIP_H;
+      return true;
     }
 
     // プレイヤーが床に乗れる状態なら、床位置と支え行を更新する。
     function settlePlayerOnFloor(player) {
-      if (player.onLadder || player.vy < 0 || !feetOnFloor(player)) return false;
-      snapToFloor(player);
-      player.supportLockRow = entitySupportRow(player);
+      if (player.onLadder || player.vy < 0 || !verticalAligned(player)) return false;
+      const supportRow = entitySupportRow(player);
+      if (!supportRowHasFloor(player, supportRow)) return false;
+      player.supportLockRow = supportRow;
+      player.vy = 0;
+      return true;
+    }
+
+    // 下向きに1ドット進むとき、通過する床面があれば着地行を返す。
+    function landingSupportRow(player, nextY) {
+      const currentFootY = player.y + player.h;
+      const nextFootY = nextY + player.h;
+      const firstRow = Math.ceil(currentFootY / CHIP_H);
+      const lastRow = Math.floor(nextFootY / CHIP_H);
+      for (let row = firstRow; row <= lastRow; row++) {
+        if (supportRowHasFloor(player, row)) return row;
+      }
+      return null;
+    }
+
+    // 梯子を上る途中で床面に到達した場合、その支え行を返す。
+    function ascendingLandingSupportRow(entity, previousY, nextY) {
+      const currentFootY = previousY + entity.h;
+      const nextFootY = nextY + entity.h;
+      const firstRow = Math.ceil(nextFootY / CHIP_H);
+      const lastRow = Math.floor((currentFootY - 0.001) / CHIP_H);
+      for (let row = firstRow; row <= lastRow; row++) {
+        if (supportRowHasFloor(entity, row)) return row;
+      }
+      return null;
+    }
+
+    // 下向きの梯子移動で床面に到達した場合、その支え行を返す。
+    function descendingLandingSupportRow(entity, previousY, nextY, passThroughFloorRow) {
+      const currentFootY = previousY + entity.h;
+      const nextFootY = nextY + entity.h;
+      const firstRow = Math.ceil((currentFootY + 0.001) / CHIP_H);
+      const lastRow = Math.floor(nextFootY / CHIP_H);
+      for (let row = firstRow; row <= lastRow; row++) {
+        const leavingStartingFloor = passThroughFloorRow !== null
+          && row >= passThroughFloorRow
+          && row < passThroughFloorRow + TILE_H / CHIP_H;
+        if (!leavingStartingFloor && supportRowHasFloor(entity, row)) return row;
+      }
+      return null;
+    }
+
+    // 梯子移動中に床面を越えたら、床上で止めて次の入力を待つ。
+    function settleAfterAscending(entity, previousY, wasClimbing) {
+      if (!wasClimbing || entity.y >= previousY) return false;
+      const supportRow = ascendingLandingSupportRow(entity, previousY, entity.y);
+      if (supportRow === null) return false;
+
+      entity.y = supportRow * CHIP_H - entity.h;
+      entity.onLadder = false;
+      entity.supportLockRow = supportRow;
+      entity.moveDistanceRemaining = 0;
+      entity.moveRemainderX = 0;
+      entity.moveRemainderY = 0;
+      entity.vx = 0;
+      entity.vy = 0;
+      entity.ladderEntryFloorRow = null;
+      entity.blockedMoveKey = "ArrowUp";
+      return true;
+    }
+
+    // 下向き移動中に開始位置の床を抜けたら、その床だけ通過対象から外す。
+    function clearPassedLadderEntryFloor(entity) {
+      if (entity.ladderEntryFloorRow === null) return;
+      const floorBottom = (entity.ladderEntryFloorRow + TILE_H / CHIP_H) * CHIP_H;
+      if (entity.y + entity.h > floorBottom) entity.ladderEntryFloorRow = null;
+    }
+
+    // 梯子を下りて次の床に着いたら、押しっぱなし入力を止めて床上に固定する。
+    function settleAfterDescending(entity, previousY, wasDescending) {
+      if (!wasDescending || entity.y <= previousY) return false;
+      const supportRow = descendingLandingSupportRow(
+        entity,
+        previousY,
+        entity.y,
+        entity.ladderEntryFloorRow
+      );
+      if (supportRow === null) {
+        clearPassedLadderEntryFloor(entity);
+        return false;
+      }
+
+      entity.y = supportRow * CHIP_H - entity.h;
+      entity.onLadder = false;
+      entity.supportLockRow = supportRow;
+      entity.moveDistanceRemaining = 0;
+      entity.moveRemainderX = 0;
+      entity.moveRemainderY = 0;
+      entity.vx = 0;
+      entity.vy = 0;
+      entity.ladderEntryFloorRow = null;
+      entity.blockedMoveKey = "ArrowDown";
       return true;
     }
 
@@ -703,15 +879,16 @@
     function updatePlayerAnimation(player, dt) {
       if (player.onLadder && Math.abs(player.vy) > 1) {
         player.climbAnim += dt * 8;
-      } else {
-        player.climbAnim = 0;
       }
 
       if (Math.abs(player.vx) > 1 && !player.onLadder) {
         player.anim += dt * 8;
-      } else {
-        player.anim = 0;
       }
+    }
+
+    function getPlayerAnimationFrameIndex(animation) {
+      const frameSequence = [0, 1, 0, 2];
+      return frameSequence[Math.floor(animation) % frameSequence.length];
     }
 
     // 敵が移動している間だけモンスタースプライトの歩行フレームを進める。
@@ -721,6 +898,25 @@
       } else {
         enemy.anim = 0;
       }
+    }
+
+    // 梯子上では上下入力を優先し、梯子に入れない場合は左右入力を使う。
+    function getPlayerMoveCommand(player) {
+      const verticalKeys = ["ArrowUp", "ArrowDown"].filter((key) => KEYS.has(key));
+      const horizontalKeys = ["ArrowLeft", "ArrowRight"].filter((key) => KEYS.has(key));
+      const preferredKey = (keys) => {
+        const latestKey = keys.includes(player.moveCommand) ? player.moveCommand : null;
+        return [latestKey, ...keys.filter((key) => key !== latestKey)]
+          .find((key) => key && key !== player.blockedMoveKey);
+      };
+      const availableLadderKeys = verticalKeys.filter((key) =>
+        player.moveFlags[key === "ArrowUp" ? "up" : "down"]
+        && key !== player.blockedMoveKey
+      );
+
+      return availableLadderKeys.length > 0
+        ? preferredKey(availableLadderKeys)
+        : preferredKey(horizontalKeys) || preferredKey(verticalKeys);
     }
 
     // 入力、重力、梯子移動、アニメーションを反映してプレイヤーを更新する。
@@ -733,89 +929,78 @@
         if (p.digging < 0) p.digging = 0;
       }
 
-      const input = readInput();
+      const command = p.moveDistanceRemaining === 0 ? getPlayerMoveCommand(p) : null;
+      if (atDecisionPoint(p) && p.moveDistanceRemaining === 0) p.moveCommand = null;
 
-      if (input.left) p.facing = -1;
-      if (input.right) p.facing = 1;
+      if (command === "ArrowLeft") p.facing = -1;
+      if (command === "ArrowRight") p.facing = 1;
 
       settlePlayerOnFloor(p);
 
       if (atDecisionPoint(p)) {
-        p.x = snapToGrid(p.x, CHIP_W);
-        p.y = snapToGrid(p.y, CHIP_H);
         refreshMoveFlags(p);
 
-        p.vx = 0;
-        p.vy = 0;
+        if (p.moveDistanceRemaining === 0) {
+          p.vx = 0;
+          p.vy = 0;
 
-        if (p.digging === 0) {
-          const currentCol = entityColumn(p);
-          const currentSupportRow = entitySupportRow(p);
-          const ladderHere = entityTouchesLadder(p);
-          const ladderAbove = ladderAboveEntity(p);
-          const exitSupportRow = currentSupportRow - 1;
-          const canStepOffLadderAtTop = p.onLadder
-            && input.up
-            && !input.down
-            && ladderHere
-            && !ladderAbove
-            && hasSideFloor(currentCol, exitSupportRow);
-
-          if (canStepOffLadderAtTop) {
-            p.onLadder = false;
-            lockToSupportRow(p, exitSupportRow);
-          } else if (input.up && !input.down && p.moveFlags.up) {
-            p.onLadder = true;
-            p.supportLockRow = null;
-            p.vy = -CONFIG.climbSpeed;
-          } else if (input.down && !input.up && p.moveFlags.down) {
-            p.onLadder = true;
-            p.supportLockRow = null;
-            p.vy = CONFIG.climbSpeed;
-          } else if (input.left && !input.right && p.moveFlags.left) {
-            p.onLadder = false;
-            lockToSupportRow(p, entitySupportRow(p));
-            p.vx = -CONFIG.moveSpeed;
-          } else if (input.right && !input.left && p.moveFlags.right) {
-            p.onLadder = false;
-            lockToSupportRow(p, entitySupportRow(p));
-            p.vx = CONFIG.moveSpeed;
-          } else {
-            const ladderStillUsable = entityTouchesLadder(p) || ladderAboveEntity(p) || ladderBelowEntity(p);
-            p.onLadder = p.onLadder && ladderStillUsable;
-            if (!p.onLadder && feetOnFloor(p)) {
-              p.supportLockRow = entitySupportRow(p);
+          if (p.digging === 0) {
+            if (startPlayerMove(p, command)) {
+              // 移動開始時の設定は startPlayerMove で完了している。
+            } else {
+              const ladderStillUsable = entityTouchesLadder(p) || ladderAboveEntity(p) || ladderBelowEntity(p);
+              p.onLadder = p.onLadder && ladderStillUsable;
+              if (!p.onLadder && feetOnFloor(p)) {
+                p.supportLockRow = entitySupportRow(p);
+              }
             }
+          } else {
+            p.onLadder = false;
+            p.supportLockRow = null;
           }
-        } else {
-          p.onLadder = false;
-          p.supportLockRow = null;
         }
       }
 
       if (p.onLadder) {
-        p.x = snapToGrid(p.x, CHIP_W);
         p.supportLockRow = null;
       } else if (p.supportLockRow !== null) {
-        p.y = p.supportLockRow * CHIP_H - p.h;
         p.vy = 0;
       } else if (feetOnFloor(p)) {
-        snapToFloor(p);
-        p.supportLockRow = entitySupportRow(p);
-        p.vy = 0;
+        if (!settlePlayerOnFloor(p)) p.vy += CONFIG.gravity * dt;
       } else {
         p.vx = 0;
         p.vy += CONFIG.gravity * dt;
       }
 
-      p.x = moveToNextBoundary(p.x, p.vx * dt, CHIP_W);
-      p.y = moveToNextBoundary(p.y, p.vy * dt, CHIP_H);
+      moveEntityInUnits(p, "x", p.vx * dt);
+      if (p.vy > 0 && !p.onLadder && p.supportLockRow === null) {
+        const totalDelta = p.moveRemainderY + p.vy * dt;
+        const steps = Math.trunc(totalDelta / MOVE_UNIT);
+        p.moveRemainderY = totalDelta - steps * MOVE_UNIT;
+        for (let i = 0; i < steps; i++) {
+          const nextY = p.y + MOVE_UNIT;
+          const landingRow = landingSupportRow(p, nextY);
+          if (landingRow !== null) {
+            p.y = landingRow * CHIP_H - p.h;
+            p.supportLockRow = landingRow;
+            p.vy = 0;
+            p.moveRemainderY = 0;
+            break;
+          }
+          p.y = nextY;
+        }
+      } else {
+        const previousY = p.y;
+        const wasClimbing = p.onLadder && p.vy < 0;
+        const wasDescending = p.onLadder && p.vy > 0;
+        moveEntityInUnits(p, "y", p.vy * dt);
+        settleAfterAscending(p, previousY, wasClimbing);
+        if (p.onLadder) settleAfterDescending(p, previousY, wasDescending);
+      }
 
       settlePlayerOnFloor(p);
 
       if (atDecisionPoint(p)) {
-        p.x = snapToGrid(p.x, CHIP_W);
-        p.y = snapToGrid(p.y, CHIP_H);
         const ladderStillUsable = entityTouchesLadder(p) || ladderAboveEntity(p) || ladderBelowEntity(p);
         if (p.onLadder && !ladderStillUsable) {
           p.onLadder = false;
@@ -825,7 +1010,6 @@
           if (footOnFloorMap(p)) {
             p.supportLockRow = entitySupportRow(p);
           } else if (p.supportLockRow !== null && canStayOnSupportRow(p, p.supportLockRow)) {
-            p.y = p.supportLockRow * CHIP_H - p.h;
             p.vy = 0;
           } else {
             p.supportLockRow = null;
@@ -849,6 +1033,9 @@
       if (choices.length === 0) {
         enemy.vx = 0;
         enemy.vy = 0;
+        enemy.moveDistanceRemaining = 0;
+        enemy.moveRemainderX = 0;
+        enemy.moveRemainderY = 0;
         return;
       }
 
@@ -867,12 +1054,19 @@
       } else if (choice === "up") {
         enemy.onLadder = true;
         enemy.supportLockRow = null;
+        enemy.ladderEntryFloorRow = null;
         enemy.vy = -CONFIG.climbSpeed * 0.85;
       } else if (choice === "down") {
+        const supportRow = entitySupportRow(enemy);
+        enemy.ladderEntryFloorRow = enemy.supportLockRow === supportRow
+          && supportRowHasFloor(enemy, supportRow)
+          ? supportRow
+          : null;
         enemy.onLadder = true;
         enemy.supportLockRow = null;
         enemy.vy = CONFIG.climbSpeed * 0.85;
       }
+      enemy.moveDistanceRemaining = TILE_W;
     }
 
     // 敵の移動、落下、穴への捕獲状態を更新する。
@@ -889,7 +1083,7 @@
 
       settleEnemyOnFloor(enemy);
 
-      if (atDecisionPoint(enemy)) {
+      if (atDecisionPoint(enemy) && enemy.moveDistanceRemaining === 0) {
         enemy.x = snapToGrid(enemy.x, CHIP_W);
         enemy.y = snapToGrid(enemy.y, CHIP_H);
         refreshMoveFlags(enemy);
@@ -908,13 +1102,19 @@
         enemy.vy = 0;
       } else {
         enemy.vx = 0;
+        enemy.moveDistanceRemaining = 0;
         enemy.vy += CONFIG.gravity * dt;
       }
 
-      enemy.x = moveToNextBoundary(enemy.x, enemy.vx * dt, CHIP_W);
-      enemy.y = moveToNextBoundary(enemy.y, enemy.vy * dt, CHIP_H);
+      moveEntityInUnits(enemy, "x", enemy.vx * dt);
+      const previousY = enemy.y;
+      const wasClimbing = enemy.onLadder && enemy.vy < 0;
+      const wasDescending = enemy.onLadder && enemy.vy > 0;
+      moveEntityInUnits(enemy, "y", enemy.vy * dt);
+      settleAfterAscending(enemy, previousY, wasClimbing);
+      if (enemy.onLadder) settleAfterDescending(enemy, previousY, wasDescending);
 
-      if (enemy.vy >= 0 && feetOnFloor(enemy)) {
+      if (!enemy.onLadder && enemy.vy >= 0 && feetOnFloor(enemy)) {
         snapToFloor(enemy);
         enemy.supportLockRow = entitySupportRow(enemy);
       }
@@ -941,7 +1141,7 @@
       }
 
       const footRow = entitySupportRow(enemy);
-      const footCol = entityColumn(enemy);
+      const footCol = Math.floor((enemy.x + enemy.w / 2) / CHIP_W);
       const hole = holeAt(footCol, footRow);
       if (hole && hole.phase === "open" && enemy.vy >= 0) {
         enemy.state = "trapped";
@@ -951,6 +1151,9 @@
         enemy.y = footRow * CHIP_H - enemy.h + 1;
         enemy.vx = 0;
         enemy.vy = 0;
+        enemy.moveDistanceRemaining = 0;
+        enemy.moveRemainderX = 0;
+        enemy.moveRemainderY = 0;
       }
 
       updateEnemyAnimation(enemy, dt);
@@ -963,13 +1166,12 @@
       if (!p) return;
       if (!KEYS.has("ArrowDown")) return;
 
-      const pCol = entityColumn(p);
       const pRow = entitySupportRow(p) - 1;
       state.enemies = state.enemies.filter((e) => {
         if (e.state !== "trapped") return true;
-        const eCol = entityColumn(e);
         const eRow = entitySupportRow(e);
-        if (eCol === pCol && eRow === pRow + 1) {
+        const overlapsHorizontally = p.x < e.x + e.w && p.x + p.w > e.x;
+        if (overlapsHorizontally && eRow === pRow + 1) {
           state.score += 200;
           return false;
         }
@@ -1014,6 +1216,7 @@
     function drawMap() {
       for (let row = 0; row < ROWS; row++) {
         for (let col = 0; col < COLS; col++) {
+          if (col % (TILE_W / CHIP_W) !== 0 || row % (TILE_H / CHIP_H) !== 0) continue;
           const chip = state.map[row][col];
           const x = col * CHIP_W;
           const y = row * CHIP_H;
@@ -1024,7 +1227,7 @@
 
       state.holes.forEach((h) => {
         ctx.fillStyle = h.phase === "closing" ? "#3a2e2e" : "#000";
-        ctx.fillRect(h.col * CHIP_W, h.row * CHIP_H, CHIP_W, CHIP_H);
+        ctx.fillRect(h.col * CHIP_W, h.row * CHIP_H, h.width * CHIP_W, h.height * CHIP_H);
       });
     }
 
@@ -1032,11 +1235,14 @@
     function drawEntities() {
       const p = state.player;
       if (p) {
-        if (p.onLadder && Math.abs(p.vy) > 1) {
-          const frame = Math.floor(p.climbAnim) % SPRITES.playerClimb.length;
+        const isMoving = p.moveDistanceRemaining > 0;
+        if (isMoving && p.onLadder && Math.abs(p.vy) > 1) {
+          const frame = getPlayerAnimationFrameIndex(p.climbAnim);
           drawSprite(SPRITES.playerClimb[frame], Math.round(p.x), Math.round(p.y));
         } else {
-          const frame = p.anim === 0 ? 0 : Math.floor(p.anim) % SPRITES.player.length;
+          const frame = isMoving && !p.onLadder
+            ? getPlayerAnimationFrameIndex(p.anim)
+            : 0;
           drawSprite(SPRITES.player[frame], Math.round(p.x), Math.round(p.y), p.facing > 0);
         }
       }
