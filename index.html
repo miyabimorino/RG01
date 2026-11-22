@@ -113,10 +113,10 @@
     const MAP_LADDER = 2;
     const FLOOR_ROWS = [4, 9, 14, 19, 24].map((row) => row * TILE_H / CHIP_H);
     const LADDER_GROUPS = [
-      { startRow: 3, endRow: 8, count: 3 },
-      { startRow: 8, endRow: 13, count: 2 },
-      { startRow: 13, endRow: 18, count: 1 },
-      { startRow: 18, endRow: 23, count: 6 },
+      { startRow: 3, endRow: 8 },
+      { startRow: 8, endRow: 13 },
+      { startRow: 13, endRow: 18 },
+      { startRow: 18, endRow: 23 },
     ];
 
     const CONFIG = {
@@ -229,6 +229,33 @@
           { x: 4, y: 11, colorCode: 2 }, { x: 5, y: 11, colorCode: 2 }, { x: 6, y: 11, colorCode: 2 },
         ],
       ],
+      playerDigAction: [
+        [
+          { x: 0, y: 0, colorCode: 5 }, { x: 1, y: 0, colorCode: 5 }, { x: 2, y: 0, colorCode: 2 }, { x: 3, y: 0, colorCode: 2 }, { x: 4, y: 0, colorCode: 2 }, { x: 5, y: 0, colorCode: 2 },
+          { x: 0, y: 1, colorCode: 5 }, { x: 1, y: 1, colorCode: 5 }, { x: 2, y: 1, colorCode: 2 }, { x: 3, y: 1, colorCode: 2 }, { x: 4, y: 1, colorCode: 2 }, { x: 5, y: 1, colorCode: 2 },
+          { x: 0, y: 2, colorCode: 5 }, { x: 2, y: 2, colorCode: 6 }, { x: 3, y: 2, colorCode: 6 }, { x: 4, y: 2, colorCode: 6 }, { x: 5, y: 2, colorCode: 6 },
+          { x: 0, y: 3, colorCode: 5 }, { x: 3, y: 3, colorCode: 6 }, { x: 4, y: 3, colorCode: 6 },
+          { x: 0, y: 4, colorCode: 6 }, { x: 1, y: 4, colorCode: 6 }, { x: 2, y: 4, colorCode: 2 }, { x: 3, y: 4, colorCode: 1 }, { x: 4, y: 4, colorCode: 1 }, { x: 5, y: 4, colorCode: 1 },
+          { x: 2, y: 5, colorCode: 1 }, { x: 3, y: 5, colorCode: 1 }, { x: 4, y: 5, colorCode: 6 }, { x: 5, y: 5, colorCode: 2 },
+          { x: 2, y: 6, colorCode: 1 }, { x: 3, y: 6, colorCode: 1 }, { x: 4, y: 6, colorCode: 1 }, { x: 5, y: 6, colorCode: 1 },
+          { x: 2, y: 7, colorCode: 1 }, { x: 3, y: 7, colorCode: 1 }, { x: 4, y: 7, colorCode: 1 }, { x: 5, y: 7, colorCode: 1 },
+          { x: 3, y: 8, colorCode: 1 }, { x: 5, y: 8, colorCode: 1 }, { x: 6, y: 8, colorCode: 2 },
+          { x: 3, y: 9, colorCode: 1 }, { x: 6, y: 9, colorCode: 2 },
+          { x: 2, y: 10, colorCode: 2 }, { x: 3, y: 10, colorCode: 2 },
+        ],
+        [
+          { x: 3, y: 0, colorCode: 2 }, { x: 4, y: 0, colorCode: 2 }, { x: 5, y: 0, colorCode: 2 },
+          { x: 2, y: 1, colorCode: 2 }, { x: 3, y: 1, colorCode: 2 }, { x: 4, y: 1, colorCode: 2 }, { x: 5, y: 1, colorCode: 2 },
+          { x: 3, y: 2, colorCode: 6 }, { x: 4, y: 2, colorCode: 6 }, { x: 5, y: 2, colorCode: 6 },
+          { x: 4, y: 3, colorCode: 6 },
+          { x: 1, y: 4, colorCode: 6 }, { x: 2, y: 4, colorCode: 2 }, { x: 3, y: 4, colorCode: 1 }, { x: 4, y: 4, colorCode: 1 }, { x: 5, y: 4, colorCode: 1 },
+          { x: 0, y: 5, colorCode: 5 }, { x: 3, y: 5, colorCode: 1 }, { x: 4, y: 5, colorCode: 6 }, { x: 5, y: 5, colorCode: 2 },
+          { x: 0, y: 6, colorCode: 5 }, { x: 3, y: 6, colorCode: 1 }, { x: 4, y: 6, colorCode: 1 }, { x: 5, y: 6, colorCode: 1 },
+          { x: 0, y: 7, colorCode: 5 }, { x: 1, y: 7, colorCode: 5 }, { x: 3, y: 7, colorCode: 1 }, { x: 4, y: 7, colorCode: 1 }, { x: 5, y: 7, colorCode: 1 },
+          { x: 0, y: 8, colorCode: 5 }, { x: 1, y: 8, colorCode: 5 }, { x: 3, y: 8, colorCode: 1 }, { x: 5, y: 8, colorCode: 1 }, { x: 6, y: 8, colorCode: 2 },
+          { x: 3, y: 9, colorCode: 1 }, { x: 6, y: 9, colorCode: 2 },
+          { x: 2, y: 10, colorCode: 2 }, { x: 3, y: 10, colorCode: 2 },],
+      ],
       monster: [
         [
           { x: 1, y: 0, colorCode: 4 }, { x: 2, y: 0, colorCode: 4 }, { x: 5, y: 0, colorCode: 4 }, { x: 6, y: 0, colorCode: 4 },
@@ -315,7 +342,8 @@
 
       LADDER_GROUPS.forEach((group) => {
         const usedCols = new Set();
-        while (usedCols.size < group.count) {
+        const ladderCount = Math.floor(Math.random() * 3) + 1;
+        while (usedCols.size < ladderCount) {
           usedCols.add(randomLadderChipColumn());
         }
         usedCols.forEach((col) => {
@@ -372,6 +400,8 @@
         onLadder: false,
         supportLockRow: null,
         digging: 0,
+        diggingAnimFrame: 0,
+        diggingSpriteFrame: 0,
         anim: 0,
         climbAnim: 0,
         moveRemainderX: 0,
@@ -688,6 +718,8 @@
       if (holeAt(col, row)) return;
 
       p.digging = CONFIG.digDuration;
+      p.diggingAnimFrame = 0;
+      p.diggingSpriteFrame = 0;
       state.holes.push({
         col,
         row,
@@ -927,6 +959,10 @@
       if (p.digging > 0) {
         p.digging -= dt;
         if (p.digging < 0) p.digging = 0;
+        p.diggingAnimFrame = (p.diggingAnimFrame + 1) & 7;
+        if (p.diggingAnimFrame === 0) {
+          p.diggingSpriteFrame = 1 - p.diggingSpriteFrame;
+        }
       }
 
       const command = p.moveDistanceRemaining === 0 ? getPlayerMoveCommand(p) : null;
@@ -1236,7 +1272,9 @@
       const p = state.player;
       if (p) {
         const isMoving = p.moveDistanceRemaining > 0;
-        if (isMoving && p.onLadder && Math.abs(p.vy) > 1) {
+        if (p.digging > 0) {
+          drawSprite(SPRITES.playerDigAction[p.diggingSpriteFrame], Math.round(p.x), Math.round(p.y), p.facing > 0);
+        } else if (isMoving && p.onLadder && Math.abs(p.vy) > 1) {
           const frame = getPlayerAnimationFrameIndex(p.climbAnim);
           drawSprite(SPRITES.playerClimb[frame], Math.round(p.x), Math.round(p.y));
         } else {
